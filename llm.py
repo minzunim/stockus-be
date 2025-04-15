@@ -30,14 +30,19 @@ def extract_keywords(text: str, count: int = 5) -> list[str]:
     }
 
     chunks = [text[i:i+CHUNK_SIZE] for i in range(0, len(text), CHUNK_SIZE)]
+    print('chunks', len(chunks))
     results = []
-    for chunk in chunks:
+    for i, chunk in enumerate(chunks):
+        if i == 3:
+            break
+        print('chunk 길이 확인', len(chunk))
+        print('몇 번째 chunk:', i)
         data["messages"][0]["content"] = chunk
         response = requests.post(GROQ_API_URL, headers=headers, json=data)
         response.raise_for_status()  # 요청 실패 시 예외 발생
         print(response.json())
         results.append(response.json()["choices"][0]["message"]["content"])
-        time.sleep(random.uniform(1, 2))
+        time.sleep(random.uniform(2, 3))
     combined_text = " ".join(results)
 
     # response = requests.post(GROQ_API_URL, headers=headers, json=data)
@@ -47,14 +52,15 @@ def extract_keywords(text: str, count: int = 5) -> list[str]:
     # return result["choices"][0]["message"]["content"].strip().split("\n"
 
     # 최종 요약 요청
-    final_prompt = f'''지금까지 요약한 텍스트를 마지막으로 한번 더 요약하고 한국어로 번역해서 2~3문장으로 말해줘:\n{combined_text}'''
-    data["messages"][0]["content"] = final_prompt
+    # final_prompt = f'''지금까지 요약한 텍스트를 마지막으로 한번 더 요약하고 한국어로 번역해서 2~3문장으로 말해줘:\n{combined_text}'''
+    # data["messages"][0]["content"] = final_prompt
 
     # 요약 요청
-    time.sleep(random.uniform(2, 3))
+    # time.sleep(random.uniform(2, 3))
 
-    response = requests.post(GROQ_API_URL, headers=headers, json=data)
-    response.raise_for_status()  # 요청 실패 시 예외 발생
-    final_summary = response.json()["choices"][0]["message"]["content"]
+    # response = requests.post(GROQ_API_URL, headers=headers, json=data)
+    # response.raise_for_status()  # 요청 실패 시 예외 발생
+    # final_summary = response.json()["choices"][0]["message"]["content"]
 
-    return final_summary
+    #return final_summary 
+    return combined_text

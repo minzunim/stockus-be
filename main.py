@@ -239,7 +239,7 @@ def scrap_posts():
 
     posts = []
     with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = [executor.submit(fetch_page_data, page) for page in range(1, 6)]  # Adjust range as needed
+        futures = [executor.submit(fetch_page_data, page) for page in range(1, 4)]  # Adjust range as needed
         for future in as_completed(futures):
             posts.extend(future.result())
 
