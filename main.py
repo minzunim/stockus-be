@@ -23,6 +23,8 @@ import time
 from llm import extract_keywords
 import random
 
+from sklearn.feature_extraction.text import TfidfVectorizer
+from konlpy.tag import Okt  # 또는 Mecab
 
 # 모델 설정
 class Item(BaseModel):
@@ -170,6 +172,48 @@ def scrap_posts():
 
         return
 
+# 한글 전처리 함수
+def tokenize_korean(text):
+    okt = Okt()
+    return [word for word, pos in okt.pos(text) if pos in ["Noun", "Verb", "Adjective"]]
+
+# TF-IDF로 키워드 뽑기
+@app.get("/extract_keywords")
+def tfIdf():
+
+    # 스프레드 시트에서 가져오기
+    sheet = client.open("stockus-posts").sheet1
+    
+    title_data = sheet.col_values(2)[1:]
+    print(title_data)
+    contents_data = sheet.col_values(6)[1:]
+    print(contents_data)
+
+    concat_list = [val for pair in zip(title_data, contents_data) for val in pair if val != '' or val != '- dc official App']   
+    print(concat_list)
+    full_text = " ".join(concat_list).replace("- dc official App","") # 전체 텍스트 합침
+
+    # TF-IDF 벡터라이저
+    vectorizer = TfidfVectorizer(tokenizer=tokenize_korean, stop_words=["ㅋㅋ", "ㅎㅎ"])
+    print(vectorizer)
+
+    # 분석
+    tfidf_matrix = vectorizer.fit_transform(concat_list)
+    print(tfidf_matrix)
+    terms = vectorizer.get_feature_names_out()
+    print(terms)
+
+    # 상위 키워드 추출
+    scores = tfidf_matrix.toarray().sum(axis=0)
+    print(score)
+    keywords = sorted(zip(terms, scores), key=lambda x: x[1], reverse=True)
+    print(keywords)
+
+    # 출력 (상위 10개)
+    for word, score in keywords[:10]:
+        print(f"{word}: {round(score, 4)}")
+
+
 # 멀티 스레딩 테스트용  
 @app.get("/scrap_posts_multi")
 def scrap_posts():
@@ -177,13 +221,13 @@ def scrap_posts():
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_2_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15",
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/118.0.5993.70 Safari/537.36",
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 15_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.2 Mobile/15E148 Safari/604.1",
-        "Mozilla/5.0 (iPad; CPU OS 15_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.1 Mobile/15E148 Safari/604.1",
+        # "Mozilla/5.0 (iPhone; CPU iPhone OS 15_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.2 Mobile/15E148 Safari/604.1",
+        # "Mozilla/5.0 (iPad; CPU OS 15_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.1 Mobile/15E148 Safari/604.1",
     ]
 
     headers = {"User-Agent": random.choice(USER_AGENTS)}
     sheet = client.open("stockus-posts").sheet1.get_all_records()
-    #max_id = max(sheet, key=lambda x: x["id"])["id"]
+    max_id = max(sheet, key=lambda x: x["id"])["id"]
 
     # 본문 스크래핑
     def fetch_post_data(post_id):
@@ -203,7 +247,7 @@ def scrap_posts():
     def fetch_page_data(page_count):
         url = f"https://gall.dcinside.com/mgallery/board/lists/?id=stockus&page={page_count}"
         res = requests.get(url, headers=headers)
-        time.sleep(random.uniform(1, 2))  # 1~2초 랜덤 딜레이
+        # time.sleep(random.uniform(1, 2))  # 1~2초 랜덤 딜레이
 
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, "html.parser")
@@ -217,8 +261,8 @@ def scrap_posts():
             posts = []
             for row in contents_list:
                 post_id = row.select_one("td.gall_num").text.strip()
-                # if post_id == max_id:
-                #     continue
+                if post_id == max_id:
+                    continue
                 title_tag = row.select_one("td.gall_tit a")
                 date = row.select_one("td.gall_date").get("title")
                 views = row.select_one("td.gall_count").text.strip()
@@ -250,8 +294,8 @@ def scrap_posts():
 
 
 # 키워드 추출
-@app.get("/extract_keywords")
-async def get_keywords():
+@app.get("/get_llm")
+async def get_llm():
     # 스프레드 시트에서 가져오기
     sheet = client.open("stockus-posts").sheet1
     
