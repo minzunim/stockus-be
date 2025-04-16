@@ -20,7 +20,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 import time
 
-from llm import extract_keywords
+from llm import extract_keywords_llama, extract_keywords_gpt
 import random
 
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -79,23 +79,17 @@ def get_market_summary():
     
     return {"data": total_list}
 
-# 구글 스프레드 시트에 글 정보 저장
-@app.get("/scrap_posts")
-def scrap_posts():
-
-    # user_agents 목록
-    USER_AGENTS = [
+USER_AGENTS = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_2_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15",
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/118.0.5993.70 Safari/537.36",
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 15_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.2 Mobile/15E148 Safari/604.1",
-        "Mozilla/5.0 (iPad; CPU OS 15_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.1 Mobile/15E148 Safari/604.1",
     ]
 
-    # user_agent 랜덤 선택
-    headers = {
-        "User-Agent": random.choice(USER_AGENTS)
-    }
+headers = {"User-Agent": random.choice(USER_AGENTS)}
+
+# 구글 스프레드 시트에 글 정보 저장
+@app.get("/scrap_posts")
+def scrap_posts():
 
     # 기존 스크래핑 데이터 열기
     sheet = client.open("stockus-posts").sheet1.get_all_records() # 객체 형태로 반환
@@ -193,41 +187,64 @@ def tfIdf():
     print(concat_list)
     full_text = " ".join(concat_list).replace("- dc official App","") # 전체 텍스트 합침
 
+    custom_stopwords = [
+    # 추임새, 반응
+    'ㅋㅋ', 'ㅎㅎ', 'ㅠㅠ', 'ㅜㅜ', 'ㄷㄷ', '헐', '음', '와', '아', '오', '요', '네', '응', '진짜', '그냥',
+
+    # 불필요한 맥락 단어
+    '주식', '종목', '시장', '뉴스', '이슈', '글', '댓글', '영상', '기사', '정보', '분석',
+    '투자', '매수', '매도', '매매', '가격', '오늘', '내일', '이번', '다음', '최근', '지금', '아직',
+
+    # 표현 + 조사
+    '근데', '그런데', '뭔가', '뭐지', '뭐야', '때문에', '그리고', '그래서', '하지만',
+    '진짜', '너무', '많이', '좀', '좀더', '더', '되게', '많이', '많음', '많다',
+    
+    # 기타 filler words
+    '사람', '개미', '외인', '기관', '나', '너', '걔', '우리', '이거', '저거', '그거',
+    
+    # 자주 나오는 약어/무의미 단어
+    'ㅇㅇ', 'ㄴㄴ', 'ㅅㅂ', 'ㅈㄴ', 'ㄹㅇ', 'ㅁㅊ', 'ㅇㅋ', 'ㄱㄱ', 'ㄴㅇㅅ', 'ㅂㅂ',
+    
+    # 숫자/단위
+    '억', '만원', '원', '퍼센트', '프로', '달러',
+
+    # 종목명에 자주 붙는 단어
+    '지주', '홀딩스', '테크', '바이오', '랩', '산업', '전자', '인터내셔널', '그룹'
+    ]
+
     # TF-IDF 벡터라이저
-    vectorizer = TfidfVectorizer(tokenizer=tokenize_korean, stop_words=["ㅋㅋ", "ㅎㅎ"])
-    print(vectorizer)
+    vectorizer = TfidfVectorizer(tokenizer=tokenize_korean) # 일단 불용어 제외
 
     # 분석
     tfidf_matrix = vectorizer.fit_transform(concat_list)
-    print(tfidf_matrix)
     terms = vectorizer.get_feature_names_out()
-    print(terms)
 
     # 상위 키워드 추출
     scores = tfidf_matrix.toarray().sum(axis=0)
-    print(score)
+    #print(scores)
     keywords = sorted(zip(terms, scores), key=lambda x: x[1], reverse=True)
-    print(keywords)
+    #print(keywords)
+
+    keywords_list = []
 
     # 출력 (상위 10개)
-    for word, score in keywords[:10]:
-        print(f"{word}: {round(score, 4)}")
+    for word, score in keywords:
+        # print(f"{word}: {round(score, 4)}")
+        # print(word)
+        keywords_list.append(word)
+        print('keywords_list', keywords_list)
 
+    return keywords_list
 
 # 멀티 스레딩 테스트용  
 @app.get("/scrap_posts_multi")
 def scrap_posts():
-    USER_AGENTS = [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_2_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15",
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/118.0.5993.70 Safari/537.36",
-        # "Mozilla/5.0 (iPhone; CPU iPhone OS 15_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.2 Mobile/15E148 Safari/604.1",
-        # "Mozilla/5.0 (iPad; CPU OS 15_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.1 Mobile/15E148 Safari/604.1",
-    ]
-
-    headers = {"User-Agent": random.choice(USER_AGENTS)}
+    
     sheet = client.open("stockus-posts").sheet1.get_all_records()
-    max_id = max(sheet, key=lambda x: x["id"])["id"]
+    if len(sheet) > 0:
+        max_id = max(sheet, key=lambda x: x["id"])["id"]
+    else:
+        max_id = 0
 
     # 본문 스크래핑
     def fetch_post_data(post_id):
@@ -283,7 +300,7 @@ def scrap_posts():
 
     posts = []
     with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = [executor.submit(fetch_page_data, page) for page in range(1, 4)]  # Adjust range as needed
+        futures = [executor.submit(fetch_page_data, page) for page in range(1, 4)]  # 1~3페이지까지 고정
         for future in as_completed(futures):
             posts.extend(future.result())
 
@@ -298,14 +315,29 @@ def scrap_posts():
 async def get_llm():
     # 스프레드 시트에서 가져오기
     sheet = client.open("stockus-posts").sheet1
-    
-    title_data = sheet.col_values(2)[1:]
-    contents_data = sheet.col_values(6)[1:]
+    all_data = sheet.get_all_records()
 
-    concat_list = [val for pair in zip(title_data, contents_data) for val in pair if val != '' or val != '- dc official App']   
-    full_text = " ".join(concat_list).replace("- dc official App","")
+    # 정렬
+    important_posts = sorted(all_data, key=lambda x: int(x["views"]), reverse=True)[:20]
+    print(important_posts)
 
-    result = extract_keywords(full_text)
+    full_text = ''
+
+    for post in important_posts:
+        full_text += post["title"] + " " + post["contents"]
+
+    # title_data = sheet.col_values(2)[1:]
+    # contents_data = sheet.col_values(6)[1:]
+
+    # concat_list = [val for pair in zip(title_data, contents_data) for val in pair if val != '' or val != '- dc official App']   
+    # full_text = " ".join(concat_list).replace("- dc official App","")
+
+    # keywords_list = tfIdf() # tfIdf 결과로 추출하기
+    # print('keywords_list', keywords_list)
+    print(full_text)
+    result = extract_keywords_gpt(full_text)
+    #result = extract_keywords(" ".join(keywords_list))
+
     return {"keywords": result}
 
 # 테스트용
