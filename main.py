@@ -239,12 +239,20 @@ def tfIdf():
 # 멀티 스레딩 테스트용  
 @app.get("/scrap_posts_multi")
 def scrap_posts():
-    
-    sheet = client.open("stockus-posts").sheet1.get_all_records()
-    if len(sheet) > 0:
-        max_id = max(sheet, key=lambda x: x["id"])["id"]
-    else:
-        max_id = 0
+
+    # 기존 데이터 조회
+    sheet = client.open("stockus-posts").worksheet("posts")
+    row_count = len(sheet.get_all_values())
+    print(row_count)
+
+    # 기존 데이터 삭제
+    if row_count > 1:
+        sheet.batch_clear([f"A2:Z{row_count}"])
+
+    # if len(sheet) > 0:
+    #     max_id = max(sheet, key=lambda x: x["id"])["id"]
+    # else:
+    #     max_id = 0
 
     # 본문 스크래핑
     def fetch_post_data(post_id):
@@ -278,8 +286,8 @@ def scrap_posts():
             posts = []
             for row in contents_list:
                 post_id = row.select_one("td.gall_num").text.strip()
-                if post_id == max_id:
-                    continue
+                # if post_id == max_id:
+                #     continue
                 title_tag = row.select_one("td.gall_tit a")
                 date = row.select_one("td.gall_date").get("title")
                 views = row.select_one("td.gall_count").text.strip()
@@ -293,7 +301,6 @@ def scrap_posts():
                     "recommend": recommend,
                     "contents": contents.replace("- dc official App", "").strip(),
                 }
-                print(post)
                 posts.append(post)
             return posts
         return []
@@ -307,12 +314,22 @@ def scrap_posts():
     sheet = client.open("stockus-posts").sheet1
     sheet.append_rows([list(post.values()) for post in posts])
 
-    return {"status": "success", "posts_count": len(posts)}
+    return {"status": "sucess", "posts_count": len(posts)}
 
 
-# 키워드 추출
-@app.get("/get_llm")
-async def get_llm():
+# llm 요약
+@app.get("/summarize_by_llm")
+async def summarize_by_llm():
+
+    # 기존 데이터 조회
+    sheet = client.open("stockus-posts").worksheet("summary")
+    row_count = len(sheet.get_all_values())
+    print(row_count)
+
+    # 기존 데이터 삭제
+    if row_count > 1:
+        sheet.batch_clear([f"A1:Z{row_count}"])
+
     # 스프레드 시트에서 가져오기
     sheet = client.open("stockus-posts").sheet1
     all_data = sheet.get_all_records()
@@ -338,7 +355,27 @@ async def get_llm():
     result = extract_keywords_gpt(full_text)
     #result = extract_keywords(" ".join(keywords_list))
 
-    return {"keywords": result}
+    sheet = client.open("stockus-posts").worksheet("summary")
+
+    time_stamp = time.strftime('%Y-%m-%d %H:%M:%S') # 년.월.일 - 시간
+    print('시간', time_stamp)
+    sheet.append_rows([[result, time_stamp]])
+
+    return {"data": result}
+
+# llm 요약 조회
+@app.get("/llm_summary")
+async def llm_summary():
+    
+    sheet = client.open("stockus-posts").worksheet("summary")
+    all_values = sheet.get_all_values()
+    last_row = all_values[-1] if all_values else None; 
+    print(last_row)
+
+    return { 
+        "text": last_row[0],
+        "time_stamp": last_row[1]
+    }
 
 # 테스트용
 @app.get("/test")

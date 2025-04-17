@@ -121,7 +121,6 @@ def extract_keywords_gpt(text: str, count: int = 5) -> list[str]:
             '''
 
     print(len(text))
-    return
 
     response = client.responses.create(
         model="gpt-4.1-nano",
@@ -129,4 +128,4 @@ def extract_keywords_gpt(text: str, count: int = 5) -> list[str]:
     )
 
     print(response.output_text)
-    return
+    return response.output_text
