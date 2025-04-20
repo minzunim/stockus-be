@@ -397,3 +397,8 @@ def read_item():
     print(list)
 
     return
+
+# ping
+@app.get("/ping")
+def ping():
+    return {"msg": "pong!"}
