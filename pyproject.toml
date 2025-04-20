@@ -1,5 +1,5 @@
 [project]
-name = "chill-stock-be"
+name = "stockus-be"
 version = "0.1.0"
 description = ""
 authors = [
@@ -20,8 +20,13 @@ dependencies = [
 ]
 
 [tool.poetry]
-packages = [{include = "chill_stock_be", from = "src"}]
-
+name = "chill-stock-be"
+version = "0.1.0"
+description = "FastAPI 주식 브리핑 API"
+authors = ["minzunim <greenteapig6@gmail.com>"]
+readme = "README.md"
+packages = [{ include = "chill_stock_be", from = "src" }]
+requires-python = ">=3.12"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
