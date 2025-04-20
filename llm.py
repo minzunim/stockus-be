@@ -103,21 +103,13 @@ def extract_keywords_gpt(text: str, count: int = 5) -> list[str]:
     OpenAI.api_key = os.getenv("OPENAI_API_KEY")
 
     prompt = f'''
-                Here are some posts from a stock market community.
+                다음 텍스트는 미국 주식에 대해 얘기하는 한국 주식 커뮤니티 게시글들을 모은 거야: {text}
+                이 대화 내용을 보고 사람들이 현재 어떤 주식에 관심을 갖고 그 주식들에 어떤 감정을 갖고 있는지 표현해줘 (긍정, 부정, 중립)
+                형식은 다음과 같이 출력해줘.
 
-                Please summarize which **stocks** people are showing interest in and what kind of **sentiment** they are expressing — **positive, negative, or mixed**.
-
-                - Don't limit the summary to only Tesla or Nvidia.  
-                - If there are **other stocks mentioned**, please **include them** in the same format.
-                - After the summary, please **translate it into Korean** in a **casual tone** like how Korean MZ generation talks — fun, trendy, and a bit playful like SNS captions or comment sections.
-
-                Here are the posts:
-                {text}
-
-                Please organize the summary in the format below:
-
-                - Tesla: Positive (가격 상승 기대중)
-                - Nvidia: Negative (하락장 이어질까봐 불안함)
+                📌 [주식 종목명] (감정): 한 줄 요약1. 한 줄 요약2.
+                📌 [주식 종목명] (감정): 한 줄 요약1. 한 줄 요약2.
+                ✨ 전반적인 분위기 요약 (2-3문장 정도로 간결하게, 친근한 말투로)
             '''
 
     print(len(text))

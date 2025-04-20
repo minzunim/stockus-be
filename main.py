@@ -238,7 +238,8 @@ def tfIdf():
 
 # 멀티 스레딩 테스트용  
 @app.get("/scrap_posts_multi")
-def scrap_posts():
+def scrap_posts_multi():
+    start = time.time()
 
     # 기존 데이터 조회
     sheet = client.open("stockus-posts").worksheet("posts")
@@ -270,7 +271,7 @@ def scrap_posts():
     
     # 페이지별 목록 스크래핑 
     def fetch_page_data(page_count):
-        url = f"https://gall.dcinside.com/mgallery/board/lists/?id=stockus&page={page_count}"
+        url = f"https://gall.dcinside.com/mgallery/board/lists/?id=stockus&page={page_count}&list_num=100" # 100개 단위로 소팅
         res = requests.get(url, headers=headers)
         # time.sleep(random.uniform(1, 2))  # 1~2초 랜덤 딜레이
 
@@ -307,19 +308,22 @@ def scrap_posts():
 
     posts = []
     with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = [executor.submit(fetch_page_data, page) for page in range(1, 4)]  # 1~3페이지까지 고정
+        futures = [executor.submit(fetch_page_data, page) for page in range(1, 6)]  # 1~3페이지까지 고정
         for future in as_completed(futures):
             posts.extend(future.result())
 
     sheet = client.open("stockus-posts").sheet1
     sheet.append_rows([list(post.values()) for post in posts])
 
-    return {"status": "sucess", "posts_count": len(posts)}
+    end = time.time()
+
+    return {"status": "sucess", "posts_count": len(posts), "time": f"{end - start: 0.2f}초"}
 
 
 # llm 요약
 @app.get("/summarize_by_llm")
 async def summarize_by_llm():
+    start = time.time()
 
     # 기존 데이터 조회
     sheet = client.open("stockus-posts").worksheet("summary")
@@ -335,7 +339,8 @@ async def summarize_by_llm():
     all_data = sheet.get_all_records()
 
     # 정렬
-    important_posts = sorted(all_data, key=lambda x: int(x["views"]), reverse=True)[:20]
+    #important_posts = sorted(all_data, key=lambda x: int(x["views"]), reverse=True)[:20]
+    important_posts = sorted(all_data, key=lambda x: int(x["views"]), reverse=True)
     print(important_posts)
 
     full_text = ''
@@ -351,7 +356,8 @@ async def summarize_by_llm():
 
     # keywords_list = tfIdf() # tfIdf 결과로 추출하기
     # print('keywords_list', keywords_list)
-    print(full_text)
+    # print(full_text)
+    print(len(full_text)) # 전체 글자수 확인
     result = extract_keywords_gpt(full_text)
     #result = extract_keywords(" ".join(keywords_list))
 
@@ -360,8 +366,10 @@ async def summarize_by_llm():
     time_stamp = time.strftime('%Y-%m-%d %H:%M:%S') # 년.월.일 - 시간
     print('시간', time_stamp)
     sheet.append_rows([[result, time_stamp]])
+    
+    end = time.time()
 
-    return {"data": result}
+    return {"data": result, "time": f"{end - start: 0.2f}초"}
 
 # llm 요약 조회
 @app.get("/llm_summary")
