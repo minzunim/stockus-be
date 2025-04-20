@@ -26,7 +26,11 @@ description = "FastAPI 주식 브리핑 API"
 authors = ["minzunim <greenteapig6@gmail.com>"]
 readme = "README.md"
 packages = [{ include = "chill_stock_be", from = "src" }]
-requires-python = ">=3.12"
+
+[tool.poetry.dependencies]
+python = ">=3.12"
+fastapi = {extras = ["standard"], version = ">=0.115.12,<0.116.0"}
+uvicorn = ">=0.34.0,<0.35.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
