@@ -34,9 +34,14 @@ class Item(BaseModel):
 
 app = FastAPI()
 
+origins = [
+    "https://stockus-fe.vercel.app",
+    "http://localhost:8000"  # 정확한 프론트엔드 origin을 명시
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # or ["http://localhost:3000"]
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
