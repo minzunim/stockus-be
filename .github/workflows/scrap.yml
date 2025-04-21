@@ -1,0 +1,23 @@
+name: Daily Scrape and Summary
+
+on:
+  schedule:
+    - cron: "50 12 * * *"
+  workflow_dispatch:  # 수동 실행도 가능하게!
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.12
+
+      - name: Install dependencies
+        run: poetry install
+
+      - name: Run scrap
+        run: python scrap.py
