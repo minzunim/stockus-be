@@ -16,6 +16,9 @@ jobs:
         with:
           python-version: 3.12
 
+      - name: Create credentials json
+        run: echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" > stock-project-456213-00f766c38980.json
+
       - name: Install Poetry
         run: curl -sSL https://install.python-poetry.org | python3
       
