@@ -26,4 +26,4 @@ jobs:
         run: poetry install
 
       - name: Run scrap
-        run: python scrap.py
+        run: poetry run python scrap.py # poetry로 실행
