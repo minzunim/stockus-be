@@ -33,11 +33,10 @@ load_dotenv()
 
 from requests.auth import HTTPBasicAuth
 
-# 모델 설정
-class Item(BaseModel):
-    name: str
-    price: float
-    is_offer: Union[bool, None] = None
+import json
+
+from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 
 app = FastAPI()
 
@@ -248,7 +247,7 @@ def tfIdf():
 
     return keywords_list
 
-# 멀티 스레딩 테스트용  
+# 멀티 스레딩 테스트용 (dc) 
 @app.get("/scrap_posts_multi")
 def scrap_posts_multi():
     start = time.time()
@@ -332,9 +331,9 @@ def scrap_posts_multi():
     return {"status": "sucess", "posts_count": len(posts), "time": f"{end - start: 0.2f}초"}
 
 
-# llm 요약
-@app.get("/summarize_by_llm")
-async def summarize_by_llm():
+# llm 요약 (dc)
+@app.get("/summarize_by_llm_dc")
+async def summarize_by_llm_dc():
     start = time.time()
 
     # 기존 데이터 조회
@@ -370,7 +369,8 @@ async def summarize_by_llm():
     # print('keywords_list', keywords_list)
     # print(full_text)
     print(len(full_text)) # 전체 글자수 확인
-    result = extract_keywords_gpt(full_text)
+        
+    result = extract_keywords_gpt(full_text, 'dc')
     #result = extract_keywords(" ".join(keywords_list))
 
     sheet = client.open("stockus-posts").worksheet("summary")
@@ -385,17 +385,32 @@ async def summarize_by_llm():
 
 # llm 요약 조회
 @app.get("/llm_summary")
-async def llm_summary():
-    
-    sheet = client.open("stockus-posts").worksheet("summary")
-    all_values = sheet.get_all_values()
-    last_row = all_values[-1] if all_values else None; 
-    print(last_row)
+def llm_summary(cm: str):
 
-    return { 
-        "text": last_row[0],
-        "time_stamp": last_row[1]
-    }
+    if cm == 'dc': # dc
+        sheet = client.open("stockus-posts").worksheet("summary")
+        all_values = sheet.get_all_values()
+        last_row = all_values[-1] if all_values else None; 
+        print(last_row)
+
+        return { 
+            "text": last_row[0],
+            "time_stamp": last_row[1]
+        }
+    elif cm == 'rd': # reddit
+
+        text = json.dumps(reddit_posts())
+        result = extract_keywords_gpt(text, 'rd')
+
+        return {
+            "text": result,
+            "time_stamp": time.strftime('%Y-%m-%d %H:%M:%S'), # 수정 필요
+        }
+    else: 
+        return {
+            "text": "잘못된 요청입니다.",
+            "time_stamp": ""
+        }
 
 # 테스트용
 @app.get("/test")
@@ -415,14 +430,16 @@ def read_item():
 def ping():
     return {"msg": "pong!"}
 
+###### 레딧 ######
+
+REDDIT_USER_NAME = os.getenv("REDDIT_USER_NAME")
+REDDIT_CLINENT_ID = os.getenv("REDDIT_CLINENT_ID")
+REDDIT_CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET")
+REDDIT_PASSWORD = os.getenv("REDDIT_PASSWORD")
+
 # reddit 토큰 추가
 @app.get("/reddit_token")
 def get_token():
-
-    REDDIT_USER_NAME = os.getenv("REDDIT_USER_NAME")
-    REDDIT_CLINENT_ID = os.getenv("REDDIT_CLINENT_ID")
-    REDDIT_CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET")
-    REDDIT_PASSWORD = os.getenv("REDDIT_PASSWORD")
 
     data = {
     'grant_type': 'password',
@@ -431,7 +448,7 @@ def get_token():
     }
 
     headers = {
-    'User-Agent': REDDIT_USER_NAME
+    'User-Agent': f'python:stock-us:v1.0 (by /u/{REDDIT_USER_NAME})'
     }
 
     auth = HTTPBasicAuth(REDDIT_CLINENT_ID, REDDIT_CLIENT_SECRET)
@@ -450,17 +467,53 @@ def get_token():
         print(response_auth.text)
     return { "token": response_auth.json()['access_token']}
 
-# reddit 포스트 저장
+# reddit 최신 포스트 가져오기
 @app.get("/reddit_posts")
 def reddit_posts():
     token = get_token()["token"]
+    # token = 'eyJhbGciOiJSUzI1NiIsImtpZCI6IlNIQTI1NjpzS3dsMnlsV0VtMjVmcXhwTU40cWY4MXE2OWFFdWFyMnpLMUdhVGxjdWNZIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyIiwiZXhwIjoxNzQ1Mzg0MTUxLjk1MTE1NSwiaWF0IjoxNzQ1Mjk3NzUxLjk1MTE1NSwianRpIjoiTUdzb0lPVEYzTndOTlBDVlI4Y2hscWtlcjdmQVVBIiwiY2lkIjoiZ1NZRVd4RG5yNnE0Z2JyVklrZnhOQSIsImxpZCI6InQyXzFrYTBhZmllMTgiLCJhaWQiOiJ0Ml8xa2EwYWZpZTE4IiwibGNhIjoxNzQwODI2OTUwMjI0LCJzY3AiOiJlSnlLVnRKU2lnVUVBQURfX3dOekFTYyIsImZsbyI6OX0.c-tJdS5vlqw6CxiU62QL11wGegNMtxjjmWSlhZaK4LT7mq3g3__ycHXvgWwiR0ekJVYoexJt_6Hvl6DwSAW8cOXZCLsKt1snSWa_fD9zuXN37Hpmh2p-mREOxPyWtJjcf_UIA1_p5_0UtnB94IXV5fdzIiJwEUOtQXRsAhnyRlELcveUaPT-B_rvMfGxr9JVOI9FZ_JNBwwUPW9KZaFLTyljpvJc0AfXjV8IrilvVqlzxMH88XutQMm-wvjJ78mg-LZLcocSarP3WVCYuG_PkZfMGXUqwjnijADZN-Ime2LSM4OOY6WS5rBfhHUuIguD2j8sRa3JG6EgDdZHUBfAxQ'
+
+    time.sleep(1)
 
     headers = {
-        'Authorization': f'Bearer {token}'
+        'Authorization': f'Bearer {token}',
+        'User-Agent': f'python:stock-us:v1.0 (by /u/{REDDIT_USER_NAME})'
     }
 
-    url = "https://oauth.reddit.com/r/wallstreetbets/new" # wallstreetebets
+    url = "https://oauth.reddit.com/r/wallstreetbets/new?limit=10" # wallstreetebets
 
     response = requests.get(url, headers=headers)
-    print(response.json())
-    return
+    data = json.loads(response.text)['data']['children']
+
+    start_kst = datetime(2025, 4, 22, 20, 0)  # 2025-04-22 20:00 KST
+    end_kst = datetime(2025, 4, 22, 21, 0)    # 2025-04-22 21:00 KST
+
+    # UTC 변환
+    start_utc = start_kst - timedelta(hours=9)
+    end_utc = end_kst - timedelta(hours=9)
+
+    start_ts = int(start_utc.replace(tzinfo=timezone.utc).timestamp())
+    end_ts = int(end_utc.replace(tzinfo=timezone.utc).timestamp())
+
+    post_list = [
+        {
+            "title": post["data"]["title"],
+            "selftext": post["data"]["selftext"],
+            "created": post["data"]["created"],
+            "utc_time": datetime.utcfromtimestamp(post["data"]["created"]).isoformat(),
+            "kst_time": (datetime.utcfromtimestamp(post["data"]["created"]) + timedelta(hours=9)).isoformat()
+        }
+        for post in data
+    ]
+
+    print('post_list', post_list)
+
+    # filtered_posts = [
+    #     post for post in post_list
+    #     if start_ts <= int(post["created"]) < end_ts
+    # ]
+
+    # print(len(filtered_posts))
+
+    # return filtered_posts
+    return post_list
