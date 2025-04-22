@@ -26,6 +26,13 @@ import random
 from sklearn.feature_extraction.text import TfidfVectorizer
 from konlpy.tag import Okt  # 또는 Mecab
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from requests.auth import HTTPBasicAuth
+
 # 모델 설정
 class Item(BaseModel):
     name: str
@@ -36,7 +43,7 @@ app = FastAPI()
 
 origins = [
     "https://stockus-fe.vercel.app",
-    "http://localhost:8000"  # 정확한 프론트엔드 origin을 명시
+    "http://localhost:9999"  # 정확한 프론트엔드 origin을 명시
 ]
 
 app.add_middleware(
@@ -407,3 +414,53 @@ def read_item():
 @app.get("/ping")
 def ping():
     return {"msg": "pong!"}
+
+# reddit 토큰 추가
+@app.get("/reddit_token")
+def get_token():
+
+    REDDIT_USER_NAME = os.getenv("REDDIT_USER_NAME")
+    REDDIT_CLINENT_ID = os.getenv("REDDIT_CLINENT_ID")
+    REDDIT_CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET")
+    REDDIT_PASSWORD = os.getenv("REDDIT_PASSWORD")
+
+    data = {
+    'grant_type': 'password',
+    'username': REDDIT_USER_NAME,
+    'password': REDDIT_PASSWORD
+    }
+
+    headers = {
+    'User-Agent': REDDIT_USER_NAME
+    }
+
+    auth = HTTPBasicAuth(REDDIT_CLINENT_ID, REDDIT_CLIENT_SECRET)
+    response_auth = requests.post(
+    'https://www.reddit.com/api/v1/access_token',
+    headers=headers,
+    data=data,
+    auth=auth
+    )
+
+    if response_auth.status_code == 200:
+        print("Access token:", response_auth.json())
+    else:
+        print(response_auth)
+        print(f"Error: {response_auth.status_code}")
+        print(response_auth.text)
+    return { "token": response_auth.json()['access_token']}
+
+# reddit 포스트 저장
+@app.get("/reddit_posts")
+def reddit_posts():
+    token = get_token()["token"]
+
+    headers = {
+        'Authorization': f'Bearer {token}'
+    }
+
+    url = "https://oauth.reddit.com/r/wallstreetbets/new" # wallstreetebets
+
+    response = requests.get(url, headers=headers)
+    print(response.json())
+    return
