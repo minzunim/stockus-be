@@ -286,7 +286,7 @@ def llm_summary(cm: str):
 
         return {
             "text": result,
-            "time_stamp": kst_now.strftime("%Y-%m-%d %H:%M:%S") # 수정 필요
+            "time_stamp": kst_now.strftime("%Y-%m-%d %H:%M:%S") # kst 기준
         }
     else: 
         return {
