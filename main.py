@@ -62,9 +62,9 @@ scope = [
 creds = ServiceAccountCredentials.from_json_keyfile_name("stock-project-456213-00f766c38980.json", scope)
 client = gspread.authorize(creds)
 
+# 미국 3대 지수 요약
 @app.get("/market_summary")
 def get_market_summary():
-    # 미국 3대 지수
     us_3 = { "다우": "^DJI", "S&P500": "^GSPC", "나스닥": "^IXIC"}
     total_list = []
     
@@ -98,7 +98,7 @@ USER_AGENTS = [
 
 headers = {"User-Agent": random.choice(USER_AGENTS)}
 
-# 구글 스프레드 시트에 글 정보 저장
+# [DC] 구글 스프레드 시트에 글 정보 저장
 @app.get("/scrap_posts")
 def scrap_posts():
 
@@ -177,77 +177,7 @@ def scrap_posts():
 
         return
 
-# 한글 전처리 함수
-def tokenize_korean(text):
-    okt = Okt()
-    return [word for word, pos in okt.pos(text) if pos in ["Noun", "Verb", "Adjective"]]
-
-# TF-IDF로 키워드 뽑기
-@app.get("/extract_keywords")
-def tfIdf():
-
-    # 스프레드 시트에서 가져오기
-    sheet = client.open("stockus-posts").sheet1
-    
-    title_data = sheet.col_values(2)[1:]
-    print(title_data)
-    contents_data = sheet.col_values(6)[1:]
-    print(contents_data)
-
-    concat_list = [val for pair in zip(title_data, contents_data) for val in pair if val != '' or val != '- dc official App']   
-    print(concat_list)
-    full_text = " ".join(concat_list).replace("- dc official App","") # 전체 텍스트 합침
-
-    custom_stopwords = [
-    # 추임새, 반응
-    'ㅋㅋ', 'ㅎㅎ', 'ㅠㅠ', 'ㅜㅜ', 'ㄷㄷ', '헐', '음', '와', '아', '오', '요', '네', '응', '진짜', '그냥',
-
-    # 불필요한 맥락 단어
-    '주식', '종목', '시장', '뉴스', '이슈', '글', '댓글', '영상', '기사', '정보', '분석',
-    '투자', '매수', '매도', '매매', '가격', '오늘', '내일', '이번', '다음', '최근', '지금', '아직',
-
-    # 표현 + 조사
-    '근데', '그런데', '뭔가', '뭐지', '뭐야', '때문에', '그리고', '그래서', '하지만',
-    '진짜', '너무', '많이', '좀', '좀더', '더', '되게', '많이', '많음', '많다',
-    
-    # 기타 filler words
-    '사람', '개미', '외인', '기관', '나', '너', '걔', '우리', '이거', '저거', '그거',
-    
-    # 자주 나오는 약어/무의미 단어
-    'ㅇㅇ', 'ㄴㄴ', 'ㅅㅂ', 'ㅈㄴ', 'ㄹㅇ', 'ㅁㅊ', 'ㅇㅋ', 'ㄱㄱ', 'ㄴㅇㅅ', 'ㅂㅂ',
-    
-    # 숫자/단위
-    '억', '만원', '원', '퍼센트', '프로', '달러',
-
-    # 종목명에 자주 붙는 단어
-    '지주', '홀딩스', '테크', '바이오', '랩', '산업', '전자', '인터내셔널', '그룹'
-    ]
-
-    # TF-IDF 벡터라이저
-    vectorizer = TfidfVectorizer(tokenizer=tokenize_korean) # 일단 불용어 제외
-
-    # 분석
-    tfidf_matrix = vectorizer.fit_transform(concat_list)
-    terms = vectorizer.get_feature_names_out()
-
-    # 상위 키워드 추출
-    scores = tfidf_matrix.toarray().sum(axis=0)
-    #print(scores)
-    keywords = sorted(zip(terms, scores), key=lambda x: x[1], reverse=True)
-    #print(keywords)
-
-    keywords_list = []
-
-    # 출력 (상위 10개)
-    for word, score in keywords:
-        # print(f"{word}: {round(score, 4)}")
-        # print(word)
-        keywords_list.append(word)
-        print('keywords_list', keywords_list)
-
-    return keywords_list
-
-# 멀티 스레딩 테스트용 (dc) 
+# [DC] 스크래핑 (멀티 스레딩)
 @app.get("/scrap_posts_multi")
 def scrap_posts_multi():
     start = time.time()
@@ -331,59 +261,9 @@ def scrap_posts_multi():
     return {"status": "sucess", "posts_count": len(posts), "time": f"{end - start: 0.2f}초"}
 
 
-# llm 요약 (dc)
-@app.get("/summarize_by_llm_dc")
-async def summarize_by_llm_dc():
-    start = time.time()
+import urllib.request
 
-    # 기존 데이터 조회
-    sheet = client.open("stockus-posts").worksheet("summary")
-    row_count = len(sheet.get_all_values())
-    print(row_count)
-
-    # 기존 데이터 삭제
-    if row_count > 1:
-        sheet.batch_clear([f"A1:Z{row_count}"])
-
-    # 스프레드 시트에서 가져오기
-    sheet = client.open("stockus-posts").sheet1
-    all_data = sheet.get_all_records()
-
-    # 정렬
-    #important_posts = sorted(all_data, key=lambda x: int(x["views"]), reverse=True)[:20]
-    important_posts = sorted(all_data, key=lambda x: int(x["views"]), reverse=True)
-    print(important_posts)
-
-    full_text = ''
-
-    for post in important_posts:
-        full_text += post["title"] + " " + post["contents"]
-
-    # title_data = sheet.col_values(2)[1:]
-    # contents_data = sheet.col_values(6)[1:]
-
-    # concat_list = [val for pair in zip(title_data, contents_data) for val in pair if val != '' or val != '- dc official App']   
-    # full_text = " ".join(concat_list).replace("- dc official App","")
-
-    # keywords_list = tfIdf() # tfIdf 결과로 추출하기
-    # print('keywords_list', keywords_list)
-    # print(full_text)
-    print(len(full_text)) # 전체 글자수 확인
-        
-    result = extract_keywords_gpt(full_text, 'dc')
-    #result = extract_keywords(" ".join(keywords_list))
-
-    sheet = client.open("stockus-posts").worksheet("summary")
-
-    time_stamp = time.strftime('%Y-%m-%d %H:%M:%S') # 년.월.일 - 시간
-    print('시간', time_stamp)
-    sheet.append_rows([[result, time_stamp]])
-    
-    end = time.time()
-
-    return {"data": result, "time": f"{end - start: 0.2f}초"}
-
-# llm 요약 조회
+# llm 요약 조회 (파라미터로 커뮤니티 구분)
 @app.get("/llm_summary")
 def llm_summary(cm: str):
 
@@ -401,34 +281,18 @@ def llm_summary(cm: str):
 
         text = json.dumps(reddit_posts())
         result = extract_keywords_gpt(text, 'rd')
+        KST = timezone(timedelta(hours=9))
+        kst_now = datetime.now(KST)
 
         return {
             "text": result,
-            "time_stamp": time.strftime('%Y-%m-%d %H:%M:%S'), # 수정 필요
+            "time_stamp": kst_now.strftime("%Y-%m-%d %H:%M:%S") # 수정 필요
         }
     else: 
         return {
             "text": "잘못된 요청입니다.",
             "time_stamp": ""
         }
-
-# 테스트용
-@app.get("/test")
-def read_item():      
-    html = '''<div class="write_div" style="overflow:hidden;width:900px;" data-tracking="feb09862036defa1cb39229b3c4b4107c46f6805a6653be982e20534f83c45">
-							<p>ㅇㅇ?</p>							
-							</div>'''
-    soup = BeautifulSoup(html, "html.parser")
-    contents = soup.find("div", class_="write_div")
-    list = contents.find_all(["p", "div"])
-    print(list)
-
-    return
-
-# ping
-@app.get("/ping")
-def ping():
-    return {"msg": "pong!"}
 
 ###### 레딧 ######
 
@@ -517,3 +381,160 @@ def reddit_posts():
 
     # return filtered_posts
     return post_list
+
+# ping (sleep 방지용)
+@app.get("/ping")
+def ping():
+    return {"msg": "pong!"}
+
+@app.get("/")
+def root():
+    return {"status": "백엔드 살아있음!"}
+
+# 테스트용
+@app.get("/test")
+def read_item():      
+    # html = '''<div class="write_div" style="overflow:hidden;width:900px;" data-tracking="feb09862036defa1cb39229b3c4b4107c46f6805a6653be982e20534f83c45">
+	# 						<p>ㅇㅇ?</p>							
+	# 						</div>'''
+    # soup = BeautifulSoup(html, "html.parser")
+    # contents = soup.find("div", class_="write_div")
+    # list = contents.find_all(["p", "div"])
+    # print(list)
+    try:
+        response = urllib.request.urlopen('https://stockus-be.onrender.com/ping').headers['Date']
+        print(response)  # ← 응답 본문 출력!
+        return
+        if date:
+            print(f"서버 시간: {date}")
+        else:
+            print("Date 헤더가 없습니다.")
+    except Exception as e:
+        print(f"에러 발생: {e}")
+
+    return
+
+####
+
+# 한글 전처리 함수
+def tokenize_korean(text):
+    okt = Okt()
+    return [word for word, pos in okt.pos(text) if pos in ["Noun", "Verb", "Adjective"]]
+
+# TF-IDF로 키워드 뽑기
+@app.get("/extract_keywords")
+def tfIdf():
+
+    # 스프레드 시트에서 가져오기
+    sheet = client.open("stockus-posts").sheet1
+    
+    title_data = sheet.col_values(2)[1:]
+    print(title_data)
+    contents_data = sheet.col_values(6)[1:]
+    print(contents_data)
+
+    concat_list = [val for pair in zip(title_data, contents_data) for val in pair if val != '' or val != '- dc official App']   
+    print(concat_list)
+    full_text = " ".join(concat_list).replace("- dc official App","") # 전체 텍스트 합침
+
+    custom_stopwords = [
+    # 추임새, 반응
+    'ㅋㅋ', 'ㅎㅎ', 'ㅠㅠ', 'ㅜㅜ', 'ㄷㄷ', '헐', '음', '와', '아', '오', '요', '네', '응', '진짜', '그냥',
+
+    # 불필요한 맥락 단어
+    '주식', '종목', '시장', '뉴스', '이슈', '글', '댓글', '영상', '기사', '정보', '분석',
+    '투자', '매수', '매도', '매매', '가격', '오늘', '내일', '이번', '다음', '최근', '지금', '아직',
+
+    # 표현 + 조사
+    '근데', '그런데', '뭔가', '뭐지', '뭐야', '때문에', '그리고', '그래서', '하지만',
+    '진짜', '너무', '많이', '좀', '좀더', '더', '되게', '많이', '많음', '많다',
+    
+    # 기타 filler words
+    '사람', '개미', '외인', '기관', '나', '너', '걔', '우리', '이거', '저거', '그거',
+    
+    # 자주 나오는 약어/무의미 단어
+    'ㅇㅇ', 'ㄴㄴ', 'ㅅㅂ', 'ㅈㄴ', 'ㄹㅇ', 'ㅁㅊ', 'ㅇㅋ', 'ㄱㄱ', 'ㄴㅇㅅ', 'ㅂㅂ',
+    
+    # 숫자/단위
+    '억', '만원', '원', '퍼센트', '프로', '달러',
+
+    # 종목명에 자주 붙는 단어
+    '지주', '홀딩스', '테크', '바이오', '랩', '산업', '전자', '인터내셔널', '그룹'
+    ]
+
+    # TF-IDF 벡터라이저
+    vectorizer = TfidfVectorizer(tokenizer=tokenize_korean) # 일단 불용어 제외
+
+    # 분석
+    tfidf_matrix = vectorizer.fit_transform(concat_list)
+    terms = vectorizer.get_feature_names_out()
+
+    # 상위 키워드 추출
+    scores = tfidf_matrix.toarray().sum(axis=0)
+    #print(scores)
+    keywords = sorted(zip(terms, scores), key=lambda x: x[1], reverse=True)
+    #print(keywords)
+
+    keywords_list = []
+
+    # 출력 (상위 10개)
+    for word, score in keywords:
+        # print(f"{word}: {round(score, 4)}")
+        # print(word)
+        keywords_list.append(word)
+        print('keywords_list', keywords_list)
+
+    return keywords_list
+
+
+# llm 요약 (dc)
+@app.get("/summarize_by_llm_dc")
+async def summarize_by_llm_dc():
+    start = time.time()
+
+    # 기존 데이터 조회
+    sheet = client.open("stockus-posts").worksheet("summary")
+    row_count = len(sheet.get_all_values())
+    print(row_count)
+
+    # 기존 데이터 삭제
+    if row_count > 1:
+        sheet.batch_clear([f"A1:Z{row_count}"])
+
+    # 스프레드 시트에서 가져오기
+    sheet = client.open("stockus-posts").sheet1
+    all_data = sheet.get_all_records()
+
+    # 정렬
+    #important_posts = sorted(all_data, key=lambda x: int(x["views"]), reverse=True)[:20]
+    important_posts = sorted(all_data, key=lambda x: int(x["views"]), reverse=True)
+    print(important_posts)
+
+    full_text = ''
+
+    for post in important_posts:
+        full_text += post["title"] + " " + post["contents"]
+
+    # title_data = sheet.col_values(2)[1:]
+    # contents_data = sheet.col_values(6)[1:]
+
+    # concat_list = [val for pair in zip(title_data, contents_data) for val in pair if val != '' or val != '- dc official App']   
+    # full_text = " ".join(concat_list).replace("- dc official App","")
+
+    # keywords_list = tfIdf() # tfIdf 결과로 추출하기
+    # print('keywords_list', keywords_list)
+    # print(full_text)
+    print(len(full_text)) # 전체 글자수 확인
+        
+    result = extract_keywords_gpt(full_text, 'dc')
+    #result = extract_keywords(" ".join(keywords_list))
+
+    sheet = client.open("stockus-posts").worksheet("summary")
+
+    time_stamp = time.strftime('%Y-%m-%d %H:%M:%S') # 년.월.일 - 시간
+    print('시간', time_stamp)
+    sheet.append_rows([[result, time_stamp]])
+    
+    end = time.time()
+
+    return {"data": result, "time": f"{end - start: 0.2f}초"}
