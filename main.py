@@ -382,6 +382,50 @@ def reddit_posts():
     # return filtered_posts
     return post_list
 
+
+# llm 요약 (dc)
+@app.get("/summarize_by_llm_dc")
+async def summarize_by_llm_dc():
+    start = time.time()
+
+    # 스프레드 시트에서 가져오기
+    sheet = client.open("stockus-posts").worksheet("posts")
+    all_data = sheet.get_all_records()
+
+    # 정렬
+    #important_posts = sorted(all_data, key=lambda x: int(x["views"]), reverse=True)[:20]
+    # important_posts = sorted(all_data, key=lambda x: int(x["views"]), reverse=True)
+    # print(important_posts)
+
+    full_text = ''
+
+    for post in all_data:
+        full_text += post["title"] + " " + post["contents"]
+
+    # title_data = sheet.col_values(2)[1:]
+    # contents_data = sheet.col_values(6)[1:]
+
+    # concat_list = [val for pair in zip(title_data, contents_data) for val in pair if val != '' or val != '- dc official App']   
+    # full_text = " ".join(concat_list).replace("- dc official App","")
+
+    # keywords_list = tfIdf() # tfIdf 결과로 추출하기
+    # print('keywords_list', keywords_list)
+    # print(full_text)
+    print(len(full_text)) # 전체 글자수 확인
+        
+    result = extract_keywords_gpt(full_text, 'dc')
+    #result = extract_keywords(" ".join(keywords_list))
+
+    sheet = client.open("stockus-posts").worksheet("summary")
+
+    time_stamp = time.strftime('%Y-%m-%d %H:%M:%S') # 년.월.일 - 시간
+    print('시간', time_stamp)
+    sheet.append_rows([[result, time_stamp]])
+    
+    end = time.time()
+
+    return {"data": result, "time": f"{end - start: 0.2f}초"}
+
 # ping (sleep 방지용)
 @app.get("/ping")
 def ping():
@@ -486,55 +530,3 @@ def tfIdf():
 
     return keywords_list
 
-
-# llm 요약 (dc)
-@app.get("/summarize_by_llm_dc")
-async def summarize_by_llm_dc():
-    start = time.time()
-
-    # 기존 데이터 조회
-    sheet = client.open("stockus-posts").worksheet("summary")
-    row_count = len(sheet.get_all_values())
-    print(row_count)
-
-    # 기존 데이터 삭제
-    if row_count > 1:
-        sheet.batch_clear([f"A1:Z{row_count}"])
-
-    # 스프레드 시트에서 가져오기
-    sheet = client.open("stockus-posts").sheet1
-    all_data = sheet.get_all_records()
-
-    # 정렬
-    #important_posts = sorted(all_data, key=lambda x: int(x["views"]), reverse=True)[:20]
-    important_posts = sorted(all_data, key=lambda x: int(x["views"]), reverse=True)
-    print(important_posts)
-
-    full_text = ''
-
-    for post in important_posts:
-        full_text += post["title"] + " " + post["contents"]
-
-    # title_data = sheet.col_values(2)[1:]
-    # contents_data = sheet.col_values(6)[1:]
-
-    # concat_list = [val for pair in zip(title_data, contents_data) for val in pair if val != '' or val != '- dc official App']   
-    # full_text = " ".join(concat_list).replace("- dc official App","")
-
-    # keywords_list = tfIdf() # tfIdf 결과로 추출하기
-    # print('keywords_list', keywords_list)
-    # print(full_text)
-    print(len(full_text)) # 전체 글자수 확인
-        
-    result = extract_keywords_gpt(full_text, 'dc')
-    #result = extract_keywords(" ".join(keywords_list))
-
-    sheet = client.open("stockus-posts").worksheet("summary")
-
-    time_stamp = time.strftime('%Y-%m-%d %H:%M:%S') # 년.월.일 - 시간
-    print('시간', time_stamp)
-    sheet.append_rows([[result, time_stamp]])
-    
-    end = time.time()
-
-    return {"data": result, "time": f"{end - start: 0.2f}초"}

@@ -1,5 +1,5 @@
 import asyncio
-from main import scrap_posts_multi, llm_summary
+from main import scrap_posts_multi, summarize_by_llm_dc
 import time
 
 def run_daily_scraper():
@@ -9,7 +9,7 @@ def run_daily_scraper():
 async def run_tasks_sequentially():
     start = time.time()
     scrap_posts_multi()
-    await llm_summary('dc') # dc 크론 처리
+    await summarize_by_llm_dc() # dc 크론 처리
     end = time.time()
     print(f"{end - start: 0.2f}초")
 
