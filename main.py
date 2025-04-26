@@ -272,7 +272,7 @@ def llm_summary(cm: str):
         all_values = sheet.get_all_values()
         last_row = all_values[-1] if all_values else None; 
         print(last_row)
-
+        
         return { 
             "text": last_row[0],
             "time_stamp": last_row[1]
@@ -335,7 +335,6 @@ def get_token():
 @app.get("/reddit_posts")
 def reddit_posts():
     token = get_token()["token"]
-    # token = 'eyJhbGciOiJSUzI1NiIsImtpZCI6IlNIQTI1NjpzS3dsMnlsV0VtMjVmcXhwTU40cWY4MXE2OWFFdWFyMnpLMUdhVGxjdWNZIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyIiwiZXhwIjoxNzQ1Mzg0MTUxLjk1MTE1NSwiaWF0IjoxNzQ1Mjk3NzUxLjk1MTE1NSwianRpIjoiTUdzb0lPVEYzTndOTlBDVlI4Y2hscWtlcjdmQVVBIiwiY2lkIjoiZ1NZRVd4RG5yNnE0Z2JyVklrZnhOQSIsImxpZCI6InQyXzFrYTBhZmllMTgiLCJhaWQiOiJ0Ml8xa2EwYWZpZTE4IiwibGNhIjoxNzQwODI2OTUwMjI0LCJzY3AiOiJlSnlLVnRKU2lnVUVBQURfX3dOekFTYyIsImZsbyI6OX0.c-tJdS5vlqw6CxiU62QL11wGegNMtxjjmWSlhZaK4LT7mq3g3__ycHXvgWwiR0ekJVYoexJt_6Hvl6DwSAW8cOXZCLsKt1snSWa_fD9zuXN37Hpmh2p-mREOxPyWtJjcf_UIA1_p5_0UtnB94IXV5fdzIiJwEUOtQXRsAhnyRlELcveUaPT-B_rvMfGxr9JVOI9FZ_JNBwwUPW9KZaFLTyljpvJc0AfXjV8IrilvVqlzxMH88XutQMm-wvjJ78mg-LZLcocSarP3WVCYuG_PkZfMGXUqwjnijADZN-Ime2LSM4OOY6WS5rBfhHUuIguD2j8sRa3JG6EgDdZHUBfAxQ'
 
     time.sleep(1)
 
@@ -344,7 +343,7 @@ def reddit_posts():
         'User-Agent': f'python:stock-us:v1.0 (by /u/{REDDIT_USER_NAME})'
     }
 
-    url = "https://oauth.reddit.com/r/wallstreetbets/new?limit=10" # wallstreetebets
+    url = "https://oauth.reddit.com/r/wallstreetbets/new?limit=20" # wallstreetebets
 
     response = requests.get(url, headers=headers)
     data = json.loads(response.text)['data']['children']
@@ -418,8 +417,10 @@ async def summarize_by_llm_dc():
 
     sheet = client.open("stockus-posts").worksheet("summary")
 
-    time_stamp = time.strftime('%Y-%m-%d %H:%M:%S') # 년.월.일 - 시간
-    print('시간', time_stamp)
+    KST = timezone(timedelta(hours=9))
+    kst_now = datetime.now(KST)
+
+    time_stamp = kst_now.strftime("%Y-%m-%d %H:%M:%S") # kst 기준
     sheet.append_rows([[result, time_stamp]])
     
     end = time.time()
