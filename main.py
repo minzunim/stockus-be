@@ -62,7 +62,42 @@ scope = [
 creds = ServiceAccountCredentials.from_json_keyfile_name("stock-project-456213-00f766c38980.json", scope)
 client = gspread.authorize(creds)
 
+# 미국 3대 지수 요약 (병렬 처리로 변경)
+@app.get("/market_summary")
+def get_market_summary():
+
+    # 여러 종목의 데이터를 동시에 다운로드하는 함수
+    def fetch_data(ticker):
+        stock_df = yf.download(ticker)
+        stock_df_tail = stock_df.tail(n=2)
+        stock_df_tail_close = stock_df_tail["Close"]
+
+        cur_close = round(stock_df_tail_close.iloc[1].item(), 2)
+        prev_close = round(stock_df_tail_close.iloc[0].item(), 2)
+        change_rate = round(((cur_close - prev_close) / prev_close * 100), 2)
+        
+        result = {
+            "ticker": ticker,
+            "prev_close": prev_close,
+            "cur_close": cur_close,
+            "change_rate": change_rate
+        }
+
+        return result
+
+    us_3 = {"다우": "^DJI", "S&P500": "^GSPC", "나스닥": "^IXIC"}
+    total_list = []
+    
+    with ThreadPoolExecutor() as executor:
+        # 병렬로 여러 데이터를 가져오기
+        results = executor.map(fetch_data, us_3.values())
+
+    total_list.extend(results)
+    
+    return {"data": total_list}
+
 # 미국 3대 지수 요약
+'''
 @app.get("/market_summary")
 def get_market_summary():
     us_3 = { "다우": "^DJI", "S&P500": "^GSPC", "나스닥": "^IXIC"}
@@ -89,6 +124,7 @@ def get_market_summary():
         total_list.append(item)
     
     return {"data": total_list}
+'''
 
 USER_AGENTS = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
@@ -271,7 +307,7 @@ def llm_summary(cm: str):
         sheet = client.open("stockus-posts").worksheet("summary")
         all_values = sheet.get_all_values()
         last_row = all_values[-1] if all_values else None; 
-        print(last_row)
+        #print(last_row)
         
         return { 
             "text": last_row[0],
@@ -369,16 +405,7 @@ def reddit_posts():
         for post in data
     ]
 
-    print('post_list', post_list)
-
-    # filtered_posts = [
-    #     post for post in post_list
-    #     if start_ts <= int(post["created"]) < end_ts
-    # ]
-
-    # print(len(filtered_posts))
-
-    # return filtered_posts
+    #print('post_list', post_list)
     return post_list
 
 
@@ -391,25 +418,11 @@ async def summarize_by_llm_dc():
     sheet = client.open("stockus-posts").worksheet("posts")
     all_data = sheet.get_all_records()
 
-    # 정렬
-    #important_posts = sorted(all_data, key=lambda x: int(x["views"]), reverse=True)[:20]
-    # important_posts = sorted(all_data, key=lambda x: int(x["views"]), reverse=True)
-    # print(important_posts)
-
     full_text = ''
 
     for post in all_data:
         full_text += post["title"] + " " + post["contents"]
 
-    # title_data = sheet.col_values(2)[1:]
-    # contents_data = sheet.col_values(6)[1:]
-
-    # concat_list = [val for pair in zip(title_data, contents_data) for val in pair if val != '' or val != '- dc official App']   
-    # full_text = " ".join(concat_list).replace("- dc official App","")
-
-    # keywords_list = tfIdf() # tfIdf 결과로 추출하기
-    # print('keywords_list', keywords_list)
-    # print(full_text)
     print(len(full_text)) # 전체 글자수 확인
         
     result = extract_keywords_gpt(full_text, 'dc')
@@ -439,13 +452,7 @@ def root():
 # 테스트용
 @app.get("/test")
 def read_item():      
-    # html = '''<div class="write_div" style="overflow:hidden;width:900px;" data-tracking="feb09862036defa1cb39229b3c4b4107c46f6805a6653be982e20534f83c45">
-	# 						<p>ㅇㅇ?</p>							
-	# 						</div>'''
-    # soup = BeautifulSoup(html, "html.parser")
-    # contents = soup.find("div", class_="write_div")
-    # list = contents.find_all(["p", "div"])
-    # print(list)
+
     try:
         response = urllib.request.urlopen('https://stockus-be.onrender.com/ping').headers['Date']
         print(response)  # ← 응답 본문 출력!
