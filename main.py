@@ -1,6 +1,6 @@
 # main.py
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from typing import Union
 
 from fastapi import FastAPI
@@ -61,43 +61,45 @@ scope = [
 
 creds = ServiceAccountCredentials.from_json_keyfile_name("stock-project-456213-00f766c38980.json", scope)
 client = gspread.authorize(creds)
+'''
+# 여러 종목의 데이터를 동시에 다운로드하는 함수
+def fetch_ticker_data(ticker):
+    stock_df = yf.download(ticker)
+    stock_df_tail = stock_df.tail(n=2)
+    stock_df_tail_close = stock_df_tail["Close"]
+
+    cur_close = round(stock_df_tail_close.iloc[1].item(), 2)
+    prev_close = round(stock_df_tail_close.iloc[0].item(), 2)
+    change_rate = round(((cur_close - prev_close) / prev_close * 100), 2)
+    
+    result = {
+        "ticker": ticker,
+        "prev_close": prev_close,
+        "cur_close": cur_close,
+        "change_rate": change_rate
+    }
+
+    return result
 
 # 미국 3대 지수 요약 (병렬 처리로 변경)
 @app.get("/market_summary")
 def get_market_summary():
 
-    # 여러 종목의 데이터를 동시에 다운로드하는 함수
-    def fetch_data(ticker):
-        stock_df = yf.download(ticker)
-        stock_df_tail = stock_df.tail(n=2)
-        stock_df_tail_close = stock_df_tail["Close"]
-
-        cur_close = round(stock_df_tail_close.iloc[1].item(), 2)
-        prev_close = round(stock_df_tail_close.iloc[0].item(), 2)
-        change_rate = round(((cur_close - prev_close) / prev_close * 100), 2)
-        
-        result = {
-            "ticker": ticker,
-            "prev_close": prev_close,
-            "cur_close": cur_close,
-            "change_rate": change_rate
-        }
-
-        return result
-
     us_3 = {"다우": "^DJI", "S&P500": "^GSPC", "나스닥": "^IXIC"}
+    tickers = list(us_3.values())
+
     total_list = []
     
-    with ThreadPoolExecutor() as executor:
+    with ProcessPoolExecutor() as executor:
         # 병렬로 여러 데이터를 가져오기
-        results = executor.map(fetch_data, us_3.values())
-
+        results = executor.map(fetch_ticker_data, tickers)
+        
     total_list.extend(results)
     
     return {"data": total_list}
-
-# 미국 3대 지수 요약
 '''
+# 미국 3대 지수 요약
+
 @app.get("/market_summary")
 def get_market_summary():
     us_3 = { "다우": "^DJI", "S&P500": "^GSPC", "나스닥": "^IXIC"}
@@ -124,7 +126,6 @@ def get_market_summary():
         total_list.append(item)
     
     return {"data": total_list}
-'''
 
 USER_AGENTS = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
