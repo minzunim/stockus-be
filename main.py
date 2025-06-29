@@ -38,6 +38,8 @@ import json
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
+from app.routers import market, scraping, llm, reddit
+
 app = FastAPI()
 
 origins = [
@@ -52,6 +54,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(market.router)
+
 
     # 구글 스프레드 시트에 저장
 scope = [
@@ -100,32 +105,32 @@ def get_market_summary():
 '''
 # 미국 3대 지수 요약
 
-@app.get("/market_summary")
-def get_market_summary():
-    us_3 = { "다우": "^DJI", "S&P500": "^GSPC", "나스닥": "^IXIC"}
-    total_list = []
+# @app.get("/market_summary")
+# def get_market_summary():
+#     us_3 = { "다우": "^DJI", "S&P500": "^GSPC", "나스닥": "^IXIC"}
+#     total_list = []
     
-    for key, value in us_3.items():
-        # 각 지수의 전체 일자 데이터
-        stock_df = yf.download(value)
-        stock_df_tail = stock_df.tail(n=2) # 최근 2일 데이터 (등락률 계산 시 필요)
-        stock_df_tail_close = stock_df_tail["Close"] # 종가만 추출
+#     for key, value in us_3.items():
+#         # 각 지수의 전체 일자 데이터
+#         stock_df = yf.download(value)
+#         stock_df_tail = stock_df.tail(n=2) # 최근 2일 데이터 (등락률 계산 시 필요)
+#         stock_df_tail_close = stock_df_tail["Close"] # 종가만 추출
 
-        # 등락률 계산: (오늘 종가 - 전일 종가 / 전일 종가) * 100
-        cur_close = round(stock_df_tail_close.iloc[1][value], 2)
-        prev_close = round(stock_df_tail_close.iloc[0][value], 2)
+#         # 등락률 계산: (오늘 종가 - 전일 종가 / 전일 종가) * 100
+#         cur_close = round(stock_df_tail_close.iloc[1][value], 2)
+#         prev_close = round(stock_df_tail_close.iloc[0][value], 2)
 
-        change_rate = round(((cur_close - prev_close) / prev_close * 100), 2) # 셋째 자리에서 반올림
-        print(change_rate)
-        item = { 
-                "ticker": value, 
-                "prev_close": prev_close,
-                "cur_close": cur_close,
-                "change_rate": change_rate
-                }
-        total_list.append(item)
+#         change_rate = round(((cur_close - prev_close) / prev_close * 100), 2) # 셋째 자리에서 반올림
+#         print(change_rate)
+#         item = { 
+#                 "ticker": value, 
+#                 "prev_close": prev_close,
+#                 "cur_close": cur_close,
+#                 "change_rate": change_rate
+#                 }
+#         total_list.append(item)
     
-    return {"data": total_list}
+#     return {"data": total_list}
 
 USER_AGENTS = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
@@ -539,3 +544,7 @@ def tfIdf():
 
     return keywords_list
 
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
