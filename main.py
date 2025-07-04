@@ -16,7 +16,6 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 
 import time
 
@@ -38,7 +37,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
-from app.routers import market, scraping, llm, reddit
+from app.routers import market, scrap, llm, reddit
 
 app = FastAPI()
 
@@ -56,81 +55,10 @@ app.add_middleware(
 )
 
 app.include_router(market.router)
+app.include_router(reddit.router)
+app.include_router(llm.router)
+app.include_router(scrap.router)
 
-
-    # 구글 스프레드 시트에 저장
-scope = [
-    "https://spreadsheets.google.com/feeds",
-    "https://www.googleapis.com/auth/drive"
-    ]
-
-creds = ServiceAccountCredentials.from_json_keyfile_name("stock-project-456213-00f766c38980.json", scope)
-client = gspread.authorize(creds)
-'''
-# 여러 종목의 데이터를 동시에 다운로드하는 함수
-def fetch_ticker_data(ticker):
-    stock_df = yf.download(ticker)
-    stock_df_tail = stock_df.tail(n=2)
-    stock_df_tail_close = stock_df_tail["Close"]
-
-    cur_close = round(stock_df_tail_close.iloc[1].item(), 2)
-    prev_close = round(stock_df_tail_close.iloc[0].item(), 2)
-    change_rate = round(((cur_close - prev_close) / prev_close * 100), 2)
-    
-    result = {
-        "ticker": ticker,
-        "prev_close": prev_close,
-        "cur_close": cur_close,
-        "change_rate": change_rate
-    }
-
-    return result
-
-# 미국 3대 지수 요약 (병렬 처리로 변경)
-@app.get("/market_summary")
-def get_market_summary():
-
-    us_3 = {"다우": "^DJI", "S&P500": "^GSPC", "나스닥": "^IXIC"}
-    tickers = list(us_3.values())
-
-    total_list = []
-    
-    with ProcessPoolExecutor() as executor:
-        # 병렬로 여러 데이터를 가져오기
-        results = executor.map(fetch_ticker_data, tickers)
-        
-    total_list.extend(results)
-    
-    return {"data": total_list}
-'''
-# 미국 3대 지수 요약
-
-# @app.get("/market_summary")
-# def get_market_summary():
-#     us_3 = { "다우": "^DJI", "S&P500": "^GSPC", "나스닥": "^IXIC"}
-#     total_list = []
-    
-#     for key, value in us_3.items():
-#         # 각 지수의 전체 일자 데이터
-#         stock_df = yf.download(value)
-#         stock_df_tail = stock_df.tail(n=2) # 최근 2일 데이터 (등락률 계산 시 필요)
-#         stock_df_tail_close = stock_df_tail["Close"] # 종가만 추출
-
-#         # 등락률 계산: (오늘 종가 - 전일 종가 / 전일 종가) * 100
-#         cur_close = round(stock_df_tail_close.iloc[1][value], 2)
-#         prev_close = round(stock_df_tail_close.iloc[0][value], 2)
-
-#         change_rate = round(((cur_close - prev_close) / prev_close * 100), 2) # 셋째 자리에서 반올림
-#         print(change_rate)
-#         item = { 
-#                 "ticker": value, 
-#                 "prev_close": prev_close,
-#                 "cur_close": cur_close,
-#                 "change_rate": change_rate
-#                 }
-#         total_list.append(item)
-    
-#     return {"data": total_list}
 
 USER_AGENTS = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
@@ -220,231 +148,226 @@ def scrap_posts():
         return
 
 # [DC] 스크래핑 (멀티 스레딩)
-@app.get("/scrap_posts_multi")
-def scrap_posts_multi():
-    start = time.time()
+# @app.get("/scrap_posts_multi")
+# def scrap_posts_multi():
+#     start = time.time()
 
-    # 기존 데이터 조회
-    sheet = client.open("stockus-posts").worksheet("posts")
-    row_count = len(sheet.get_all_values())
-    print(row_count)
+#     # 기존 데이터 조회
+#     sheet = client.open("stockus-posts").worksheet("posts")
+#     row_count = len(sheet.get_all_values())
+#     print(row_count)
 
-    # 기존 데이터 삭제
-    if row_count > 1:
-        sheet.batch_clear([f"A2:Z{row_count}"])
+#     # 기존 데이터 삭제
+#     if row_count > 1:
+#         sheet.batch_clear([f"A2:Z{row_count}"])
 
-    # if len(sheet) > 0:
-    #     max_id = max(sheet, key=lambda x: x["id"])["id"]
-    # else:
-    #     max_id = 0
+#     # if len(sheet) > 0:
+#     #     max_id = max(sheet, key=lambda x: x["id"])["id"]
+#     # else:
+#     #     max_id = 0
 
-    # 본문 스크래핑
-    def fetch_post_data(post_id):
-        url = f"https://gall.dcinside.com/mgallery/board/view/?id=stockus&no={post_id}"
-        res = requests.get(url, headers=headers)
-        time.sleep(random.uniform(0, 1)) # 0~1초 랜덤
+#     # 본문 스크래핑
+#     def fetch_post_data(post_id):
+#         url = f"https://gall.dcinside.com/mgallery/board/view/?id=stockus&no={post_id}"
+#         res = requests.get(url, headers=headers)
+#         time.sleep(random.uniform(0, 1)) # 0~1초 랜덤
         
-        if res.status_code == 200:
-            soup = BeautifulSoup(res.text, "html.parser")
-            contents = soup.find("div", class_="write_div")
-            if contents:
-                divs = contents.find_all(["p", "span", "div"])
-                return " ".join(list(set([div.text for div in divs])))
-        return ""
+#         if res.status_code == 200:
+#             soup = BeautifulSoup(res.text, "html.parser")
+#             contents = soup.find("div", class_="write_div")
+#             if contents:
+#                 divs = contents.find_all(["p", "span", "div"])
+#                 return " ".join(list(set([div.text for div in divs])))
+#         return ""
     
-    # 페이지별 목록 스크래핑 
-    def fetch_page_data(page_count):
-        url = f"https://gall.dcinside.com/mgallery/board/lists/?id=stockus&page={page_count}&list_num=100" # 100개 단위로 소팅
-        res = requests.get(url, headers=headers)
-        # time.sleep(random.uniform(1, 2))  # 1~2초 랜덤 딜레이
+#     # 페이지별 목록 스크래핑 
+#     def fetch_page_data(page_count):
+#         url = f"https://gall.dcinside.com/mgallery/board/lists/?id=stockus&page={page_count}&list_num=100" # 100개 단위로 소팅
+#         res = requests.get(url, headers=headers)
+#         # time.sleep(random.uniform(1, 2))  # 1~2초 랜덤 딜레이
 
-        if res.status_code == 200:
-            soup = BeautifulSoup(res.text, "html.parser")
-            contents_list = soup.find_all(
-                lambda tag: (
-                    tag.name == "tr"
-                    and "us-post" in tag.get("class", [])
-                    and tag.get("data-type") != "icon_notice"
-                )
-            )
-            posts = []
-            for row in contents_list:
-                post_id = row.select_one("td.gall_num").text.strip()
-                # if post_id == max_id:
-                #     continue
-                title_tag = row.select_one("td.gall_tit a")
-                date = row.select_one("td.gall_date").get("title")
-                views = row.select_one("td.gall_count").text.strip()
-                recommend = row.select_one("td.gall_recommend").text.strip()
-                contents = fetch_post_data(post_id)
-                post = {
-                    "id": post_id,
-                    "title": title_tag.text.strip(),
-                    "date": date,
-                    "views": views,
-                    "recommend": recommend,
-                    "contents": contents.replace("- dc official App", "").strip(),
-                }
-                posts.append(post)
-            return posts
-        return []
+#         if res.status_code == 200:
+#             soup = BeautifulSoup(res.text, "html.parser")
+#             contents_list = soup.find_all(
+#                 lambda tag: (
+#                     tag.name == "tr"
+#                     and "us-post" in tag.get("class", [])
+#                     and tag.get("data-type") != "icon_notice"
+#                 )
+#             )
+#             posts = []
+#             for row in contents_list:
+#                 post_id = row.select_one("td.gall_num").text.strip()
+#                 # if post_id == max_id:
+#                 #     continue
+#                 title_tag = row.select_one("td.gall_tit a")
+#                 date = row.select_one("td.gall_date").get("title")
+#                 views = row.select_one("td.gall_count").text.strip()
+#                 recommend = row.select_one("td.gall_recommend").text.strip()
+#                 contents = fetch_post_data(post_id)
+#                 post = {
+#                     "id": post_id,
+#                     "title": title_tag.text.strip(),
+#                     "date": date,
+#                     "views": views,
+#                     "recommend": recommend,
+#                     "contents": contents.replace("- dc official App", "").strip(),
+#                 }
+#                 posts.append(post)
+#             return posts
+#         return []
 
-    posts = []
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = [executor.submit(fetch_page_data, page) for page in range(1, 6)]  # 1~3페이지까지 고정
-        for future in as_completed(futures):
-            posts.extend(future.result())
+#     posts = []
+#     with ThreadPoolExecutor(max_workers=5) as executor:
+#         futures = [executor.submit(fetch_page_data, page) for page in range(1, 6)]  # 1~3페이지까지 고정
+#         for future in as_completed(futures):
+#             posts.extend(future.result())
 
-    sheet = client.open("stockus-posts").sheet1
-    sheet.append_rows([list(post.values()) for post in posts])
+#     sheet = client.open("stockus-posts").sheet1
+#     sheet.append_rows([list(post.values()) for post in posts])
 
-    end = time.time()
+#     end = time.time()
 
-    return {"status": "sucess", "posts_count": len(posts), "time": f"{end - start: 0.2f}초"}
+#     return {"status": "sucess", "posts_count": len(posts), "time": f"{end - start: 0.2f}초"}
 
 
 import urllib.request
 
 # llm 요약 조회 (파라미터로 커뮤니티 구분)
-@app.get("/llm_summary")
-def llm_summary(cm: str):
+# @app.get("/llm_summary")
+# def llm_summary(cm: str):
 
-    if cm == 'dc': # dc
-        sheet = client.open("stockus-posts").worksheet("summary")
-        all_values = sheet.get_all_values()
-        last_row = all_values[-1] if all_values else None; 
-        #print(last_row)
+#     if cm == 'dc': # dc
+#         sheet = client.open("stockus-posts").worksheet("summary")
+#         all_values = sheet.get_all_values()
+#         last_row = all_values[-1] if all_values else None; 
+#         #print(last_row)
         
-        return { 
-            "text": last_row[0],
-            "time_stamp": last_row[1]
-        }
-    elif cm == 'rd': # reddit
+#         return { 
+#             "text": last_row[0],
+#             "time_stamp": last_row[1]
+#         }
+#     elif cm == 'rd': # reddit
 
-        text = json.dumps(reddit_posts())
-        result = extract_keywords_gpt(text, 'rd')
-        KST = timezone(timedelta(hours=9))
-        kst_now = datetime.now(KST)
+#         text = json.dumps(reddit_posts())
+#         result = extract_keywords_gpt(text, 'rd')
+#         KST = timezone(timedelta(hours=9))
+#         kst_now = datetime.now(KST)
 
-        return {
-            "text": result,
-            "time_stamp": kst_now.strftime("%Y-%m-%d %H:%M:%S") # kst 기준
-        }
-    else: 
-        return {
-            "text": "잘못된 요청입니다.",
-            "time_stamp": ""
-        }
+#         return {
+#             "text": result,
+#             "time_stamp": kst_now.strftime("%Y-%m-%d %H:%M:%S") # kst 기준
+#         }
+#     else: 
+#         return {
+#             "text": "잘못된 요청입니다.",
+#             "time_stamp": ""
+#         }
 
 ###### 레딧 ######
 
-REDDIT_USER_NAME = os.getenv("REDDIT_USER_NAME")
-REDDIT_CLINENT_ID = os.getenv("REDDIT_CLINENT_ID")
-REDDIT_CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET")
-REDDIT_PASSWORD = os.getenv("REDDIT_PASSWORD")
-
 # reddit 토큰 추가
-@app.get("/reddit_token")
-def get_token():
+# @app.get("/reddit_token")
+# def get_token():
 
-    data = {
-    'grant_type': 'password',
-    'username': REDDIT_USER_NAME,
-    'password': REDDIT_PASSWORD
-    }
+#     data = {
+#     'grant_type': 'password',
+#     'username': REDDIT_USER_NAME,
+#     'password': REDDIT_PASSWORD
+#     }
 
-    headers = {
-    'User-Agent': f'python:stock-us:v1.0 (by /u/{REDDIT_USER_NAME})'
-    }
+#     headers = {
+#     'User-Agent': f'python:stock-us:v1.0 (by /u/{REDDIT_USER_NAME})'
+#     }
 
-    auth = HTTPBasicAuth(REDDIT_CLINENT_ID, REDDIT_CLIENT_SECRET)
-    response_auth = requests.post(
-    'https://www.reddit.com/api/v1/access_token',
-    headers=headers,
-    data=data,
-    auth=auth
-    )
+#     auth = HTTPBasicAuth(REDDIT_CLINENT_ID, REDDIT_CLIENT_SECRET)
+#     response_auth = requests.post(
+#     'https://www.reddit.com/api/v1/access_token',
+#     headers=headers,
+#     data=data,
+#     auth=auth
+#     )
 
-    if response_auth.status_code == 200:
-        print("Access token:", response_auth.json())
-    else:
-        print(response_auth)
-        print(f"Error: {response_auth.status_code}")
-        print(response_auth.text)
-    return { "token": response_auth.json()['access_token']}
+#     if response_auth.status_code == 200:
+#         print("Access token:", response_auth.json())
+#     else:
+#         print(response_auth)
+#         print(f"Error: {response_auth.status_code}")
+#         print(response_auth.text)
+#     return { "token": response_auth.json()['access_token']}
 
 # reddit 최신 포스트 가져오기
-@app.get("/reddit_posts")
-def reddit_posts():
-    token = get_token()["token"]
+# @app.get("/reddit_posts")
+# def reddit_posts():
+#     token = get_token()["token"]
 
-    time.sleep(1)
+#     time.sleep(1)
 
-    headers = {
-        'Authorization': f'Bearer {token}',
-        'User-Agent': f'python:stock-us:v1.0 (by /u/{REDDIT_USER_NAME})'
-    }
+#     headers = {
+#         'Authorization': f'Bearer {token}',
+#         'User-Agent': f'python:stock-us:v1.0 (by /u/{REDDIT_USER_NAME})'
+#     }
 
-    url = "https://oauth.reddit.com/r/wallstreetbets/new?limit=20" # wallstreetebets
+#     url = "https://oauth.reddit.com/r/wallstreetbets/new?limit=20" # wallstreetebets
 
-    response = requests.get(url, headers=headers)
-    data = json.loads(response.text)['data']['children']
+#     response = requests.get(url, headers=headers)
+#     data = json.loads(response.text)['data']['children']
 
-    start_kst = datetime(2025, 4, 22, 20, 0)  # 2025-04-22 20:00 KST
-    end_kst = datetime(2025, 4, 22, 21, 0)    # 2025-04-22 21:00 KST
+#     start_kst = datetime(2025, 4, 22, 20, 0)  # 2025-04-22 20:00 KST
+#     end_kst = datetime(2025, 4, 22, 21, 0)    # 2025-04-22 21:00 KST
 
-    # UTC 변환
-    start_utc = start_kst - timedelta(hours=9)
-    end_utc = end_kst - timedelta(hours=9)
+#     # UTC 변환
+#     start_utc = start_kst - timedelta(hours=9)
+#     end_utc = end_kst - timedelta(hours=9)
 
-    start_ts = int(start_utc.replace(tzinfo=timezone.utc).timestamp())
-    end_ts = int(end_utc.replace(tzinfo=timezone.utc).timestamp())
+#     start_ts = int(start_utc.replace(tzinfo=timezone.utc).timestamp())
+#     end_ts = int(end_utc.replace(tzinfo=timezone.utc).timestamp())
 
-    post_list = [
-        {
-            "title": post["data"]["title"],
-            "selftext": post["data"]["selftext"],
-            "created": post["data"]["created"],
-            "utc_time": datetime.utcfromtimestamp(post["data"]["created"]).isoformat(),
-            "kst_time": (datetime.utcfromtimestamp(post["data"]["created"]) + timedelta(hours=9)).isoformat()
-        }
-        for post in data
-    ]
+#     post_list = [
+#         {
+#             "title": post["data"]["title"],
+#             "selftext": post["data"]["selftext"],
+#             "created": post["data"]["created"],
+#             "utc_time": datetime.utcfromtimestamp(post["data"]["created"]).isoformat(),
+#             "kst_time": (datetime.utcfromtimestamp(post["data"]["created"]) + timedelta(hours=9)).isoformat()
+#         }
+#         for post in data
+#     ]
 
-    #print('post_list', post_list)
-    return post_list
+#     #print('post_list', post_list)
+#     return post_list
 
 
 # llm 요약 (dc)
-@app.get("/summarize_by_llm_dc")
-async def summarize_by_llm_dc():
-    start = time.time()
+# @app.get("/summarize_by_llm_dc")
+# async def summarize_by_llm_dc():
+#     start = time.time()
 
-    # 스프레드 시트에서 가져오기
-    sheet = client.open("stockus-posts").worksheet("posts")
-    all_data = sheet.get_all_records()
+#     # 스프레드 시트에서 가져오기
+#     sheet = client.open("stockus-posts").worksheet("posts")
+#     all_data = sheet.get_all_records()
 
-    full_text = ''
+#     full_text = ''
 
-    for post in all_data:
-        full_text += post["title"] + " " + post["contents"]
+#     for post in all_data:
+#         full_text += post["title"] + " " + post["contents"]
 
-    print(len(full_text)) # 전체 글자수 확인
+#     print(len(full_text)) # 전체 글자수 확인
         
-    result = extract_keywords_gpt(full_text, 'dc')
-    #result = extract_keywords(" ".join(keywords_list))
+#     result = extract_keywords_gpt(full_text, 'dc')
+#     #result = extract_keywords(" ".join(keywords_list))
 
-    sheet = client.open("stockus-posts").worksheet("summary")
+#     sheet = client.open("stockus-posts").worksheet("summary")
 
-    KST = timezone(timedelta(hours=9))
-    kst_now = datetime.now(KST)
+#     KST = timezone(timedelta(hours=9))
+#     kst_now = datetime.now(KST)
 
-    time_stamp = kst_now.strftime("%Y-%m-%d %H:%M:%S") # kst 기준
-    sheet.append_rows([[result, time_stamp]])
+#     time_stamp = kst_now.strftime("%Y-%m-%d %H:%M:%S") # kst 기준
+#     sheet.append_rows([[result, time_stamp]])
     
-    end = time.time()
+#     end = time.time()
 
-    return {"data": result, "time": f"{end - start: 0.2f}초"}
+#     return {"data": result, "time": f"{end - start: 0.2f}초"}
 
 # ping (sleep 방지용)
 @app.get("/ping")
