@@ -1,4 +1,111 @@
+import time
+import requests
+import random
+
+from oauth2client.service_account import ServiceAccountCredentials
+import gspread
+
+from bs4 import BeautifulSoup
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+
+USER_AGENTS = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_2_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/118.0.5993.70 Safari/537.36",
+    ]
+
+headers = {"User-Agent": random.choice(USER_AGENTS)}
+
+# 구글 스프레드 시트에 저장
+scope = [
+    "https://spreadsheets.google.com/feeds",
+    "https://www.googleapis.com/auth/drive"
+    ]
+
+creds = ServiceAccountCredentials.from_json_keyfile_name("stock-project-456213-00f766c38980.json", scope)
+client = gspread.authorize(creds)
+
 class ScrapService:
+   
+   # [DC] 구글 스프레드 시트에 글 정보 저장
+   @staticmethod
+   def scrap_posts():
+
+    # 기존 스크래핑 데이터 열기
+    sheet = client.open("stockus-posts").sheet1.get_all_records() # 객체 형태로 반환
+    max_id = max(sheet, key=lambda x: x["id"]) # 현재까지 저장된 가장 큰 아이디 값
+    
+    while True:
+        page_count = 1
+
+        url = f"https://gall.dcinside.com/mgallery/board/lists/?id=stockus&page={page_count}" # 페이징으로 호출
+        res = requests.get(url, headers=headers)
+
+        # 1페이지에 있는 전체 글 번호, 제목, 링크 수집
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, "html.parser")
+            contents_list = soup.find_all(
+                lambda tag: (
+                    tag.name == "tr"
+                    and "us-post" in tag.get("class", [])
+                    and tag.get("data-type") != "icon_notice" # 공지 설문 제외
+                )
+            )
+
+            posts = []
+
+            for i, row in enumerate(contents_list):
+                print(i, row)
+
+                post_id = row.select_one("td.gall_num").text.strip()
+                if post_id == max_id:
+                    continue
+
+                title_tag = row.select_one("td.gall_tit a")
+                date = row.select_one("td.gall_date").get("title")
+                views = row.select_one("td.gall_count").text.strip()
+                recommend = row.select_one("td.gall_recommend").text.strip()
+                second_div = ""
+
+                url = f"https://gall.dcinside.com/mgallery/board/view/?id=stockus&no={post_id}" # 개별 게시글 호출
+                res = requests.get(url, headers=headers)
+
+                if res.status_code == 200:
+                    soup = BeautifulSoup(res.text, "html.parser")
+
+                    contents = soup.find("div", class_="write_div")
+                    if contents == None:
+                        continue
+                    else:
+                        divs = contents.find_all(["p", "span", "div"])
+                        if len(divs) > 0:
+                            second_div = " ".join(list(set([div.text for div in divs])))
+                        time.sleep(1.5)
+
+                post = {
+                    "id": post_id,
+                    "title": title_tag.text.strip(),
+                    "date": date,
+                    "views": views,
+                    "recommend": recommend,
+                    "contents": second_div
+                }
+
+                post_list = list(post.values())
+
+                posts.append(post_list)
+                # 마지막 게시글일 때
+                if len(contents_list) - 1 == i:
+                    page_count += 1 
+        else:
+            print(res)
+            return
+
+        sheet = client.open("stockus-posts").sheet1
+        sheet.append_rows(posts)
+
+        return
+
    @staticmethod
    def scrap_posts_multi():
       start = time.time()

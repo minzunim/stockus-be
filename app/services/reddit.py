@@ -1,5 +1,10 @@
+from datetime import datetime, timedelta, timezone
+import json
 import os
+import time
 from dotenv import load_dotenv
+import requests
+from requests.auth import HTTPBasicAuth
 
 load_dotenv()
 
@@ -41,7 +46,7 @@ class RedditService:
     # reddit 최신 포스트 가져오기
     @staticmethod
     def get_reddit_posts():
-        token = get_token()["token"]
+        token = RedditService.get_token()["token"]
 
         time.sleep(1)
 
