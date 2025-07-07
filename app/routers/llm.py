@@ -11,4 +11,4 @@ async def summarize_by_llm_dc():
 # llm 요약 조회 (파라미터로 커뮤니티 구분)
 @router.get("/summary")
 async def llm_summary(cm):
-   return LlmService.llm_summary(cm)
+   return await LlmService.llm_summary(cm)

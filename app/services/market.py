@@ -1,5 +1,5 @@
 from typing import Dict
-from curl_cffi import requests
+from curl_cffi import requests as curl_requests
 import yfinance as yf
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -9,6 +9,9 @@ class MarketService:
     @staticmethod
     # 미국 3대 주요 지수 조회
     def get_market_summary_legacy() -> Dict:
+
+        session = curl_requests.Session(impersonate="chrome")
+        
         us_3 = { "다우": "^DJI", "S&P500": "^GSPC", "나스닥": "^IXIC"}
         total_list = []
         
@@ -44,9 +47,10 @@ class MarketService:
                     "change_rate": change_rate
             }
             total_list.append(item)
+        session.close()
         
         return {"data": total_list}
-    
+            
     @staticmethod
     def get_market_summary_single() -> Dict:
         """단일 ticker 데이터를 가져오는 함수"""
@@ -60,7 +64,6 @@ class MarketService:
         try:
             # 최근 2일 데이터 (등락률 계산 시 필요)
             stock_df_tail = yf.download(f"{us_3[0]} {us_3[1]} {us_3[2]}", progress=False, session=session, period="2d")
-            print('aaa', stock_df_tail)
 
             # if stock_df_tail.empty:
             #     logging.warning(f"{key} ({value}) 데이터가 없습니다.")
@@ -71,7 +74,6 @@ class MarketService:
             #     return None
 
             stock_df_tail_close = stock_df_tail["Close"] # 종가만 추출
-            print("stock_df_tail_close", stock_df_tail_close)
 
             # 등락률 계산: (오늘 종가 - 전일 종가 / 전일 종가) * 100
 
@@ -80,14 +82,11 @@ class MarketService:
             for ticker in us_3:
                 try:
                     cur_close = round(stock_df_tail_close.iloc[1][ticker], 2)
-                    print("cur_close", cur_close)
-
                     prev_close = round(stock_df_tail_close.iloc[0][ticker], 2)
-                    print("prev_close", prev_close)
 
                 except (IndexError, KeyError) as e:
                     logging.error(f"Data access error for {str(e)}")
-                    return None
+                    continue
 
                 change_rate = round(((cur_close - prev_close) / prev_close * 100), 2) # 셋째 자리에서 반올림
 
@@ -99,12 +98,14 @@ class MarketService:
                         }
                 total_list.append(item)
                 end_time = time.time()
-                print(f"{end_time - start_time:.2f}초")
 
             return {"data": total_list}
         
         except Exception as e:
             logging.error(f"Error processing {str(e)}")
+        
+        finally:
+            session.close()  # 세션 명시적 종료
 
     @staticmethod
     # 미국 3대 주요 지수 조회 (병렬 처리)

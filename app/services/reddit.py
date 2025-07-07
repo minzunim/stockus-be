@@ -14,9 +14,11 @@ REDDIT_CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET")
 REDDIT_PASSWORD = os.getenv("REDDIT_PASSWORD")
 
 class RedditService:
+    # reddit access_token 발급
     @staticmethod
     def get_token():
 
+        start = time.time()
         data = {
         'grant_type': 'password',
         'username': REDDIT_USER_NAME,
@@ -27,6 +29,7 @@ class RedditService:
         'User-Agent': f'python:stock-us:v1.0 (by /u/{REDDIT_USER_NAME})'
         }
 
+        # base64로 인코딩해서 헤더에 전달
         auth = HTTPBasicAuth(REDDIT_CLINENT_ID, REDDIT_CLIENT_SECRET)
         response_auth = requests.post(
         'https://www.reddit.com/api/v1/access_token',
@@ -41,6 +44,9 @@ class RedditService:
             print(response_auth)
             print(f"Error: {response_auth.status_code}")
             print(response_auth.text)
+        
+        end = time.time()
+
         return { "token": response_auth.json()['access_token']}
 
     # reddit 최신 포스트 가져오기
@@ -50,6 +56,7 @@ class RedditService:
 
         time.sleep(1)
 
+        start = time.time()
         headers = {
             'Authorization': f'Bearer {token}',
             'User-Agent': f'python:stock-us:v1.0 (by /u/{REDDIT_USER_NAME})'
@@ -59,6 +66,9 @@ class RedditService:
 
         response = requests.get(url, headers=headers)
         data = json.loads(response.text)['data']['children']
+
+        end = time.time()
+        # print(f"소요시간1: {end - start}")
 
         start_kst = datetime(2025, 4, 22, 20, 0)  # 2025-04-22 20:00 KST
         end_kst = datetime(2025, 4, 22, 21, 0)    # 2025-04-22 21:00 KST
@@ -80,6 +90,9 @@ class RedditService:
             }
             for post in data
         ]
+        
+        end2 = time.time()
+        # print(f"소요시간2: {end2 - end}")
 
         #print('post_list', post_list)
         return post_list

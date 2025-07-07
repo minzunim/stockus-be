@@ -7,6 +7,7 @@ import requests
 import random 
 import os
 from dotenv import load_dotenv
+import asyncio
 
 from openai import OpenAI
 
@@ -63,6 +64,15 @@ class LlmService:
         # print(response.output_text)
         return response.choices[0].message.content
 
+    """비동기 버전의 GPT 키워드 추출"""
+    @staticmethod
+    async def extract_keywords_gpt_async(text: str, cm: str) -> str:
+        
+        # 동기 함수를 비동기로 실행
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, LlmService.extract_keywords_gpt, text, cm)
+        return result
+
     # DC 스크래핑 저장된 게시글 전체 조회 -> llm으로 요약 후 시트에 저장
     @staticmethod
     async def summarize_by_llm_dc():
@@ -97,21 +107,28 @@ class LlmService:
     # llm 요약 글 조회
     # DC: 시트에 저장된 요약 조회 / Reddit: 시트 저장 x -> Reddit API 호출 후 바로 llm 요약
     @staticmethod
-    def llm_summary(cm: str):
+    async def llm_summary(cm: str):
         if cm == 'dc': # dc
             sheet = client.open("stockus-posts").worksheet("summary")
             all_values = sheet.get_all_values()
             last_row = all_values[-1] if all_values else None; 
         #print(last_row)
             
-            return { 
-                "text": last_row[0],
-                "time_stamp": last_row[1]
-            }
+            if last_row:
+                return { 
+                    "text": last_row[0],
+                    "time_stamp": last_row[1]
+                }
+            else:
+                return { 
+                    "text": "데이터가 없습니다.",
+                    "time_stamp": "" 
+                    }
+
         elif cm == 'rd': # reddit
 
             text = json.dumps(RedditService.get_reddit_posts())
-            result = LlmService.extract_keywords_gpt(text, 'rd')
+            result = await LlmService.extract_keywords_gpt_async(text, 'rd')
             KST = timezone(timedelta(hours=9))
             kst_now = datetime.now(KST)
 
