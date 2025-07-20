@@ -6,7 +6,7 @@ authors = [
     {name = "minzunim",email = "greenteapig6@gmail.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12, <4.0"
 dependencies = [
     "fastapi[standard] (>=0.115.12,<0.116.0)",
     "uvicorn (>=0.34.0,<0.35.0)",
@@ -17,7 +17,8 @@ dependencies = [
     "openai (>=1.72.0,<2.0.0)",
     "scikit-learn (>=1.6.1,<2.0.0)",
     "konlpy (>=0.6.0,<0.7.0)",
-    "curl-cffi (>=0.11.4,<0.12.0)"
+    "curl-cffi (>=0.11.4,<0.12.0)",
+    "supabase (>=2.16.0,<3.0.0)"
 ]
 
 [tool.poetry]
@@ -29,7 +30,7 @@ readme = "README.md"
 packages = [{ include = "chill_stock_be", from = "src" }]
 
 [tool.poetry.dependencies]
-python = ">=3.12"
+python = ">=3.12, <4.0"
 fastapi = {extras = ["standard"], version = ">=0.115.12,<0.116.0"}
 uvicorn = ">=0.34.0,<0.35.0"
 httpx = ">=0.28.1,<0.29.0"

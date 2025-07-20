@@ -15,6 +15,9 @@ from app.services.reddit import RedditService
 from konlpy.tag import Okt  # 또는 Mecab
 from sklearn.feature_extraction.text import TfidfVectorizer
 
+from openai import AsyncOpenAI
+from supabase_client import supabase
+
 load_dotenv()
 
 # 구글 스프레드 시트에 저장
@@ -35,8 +38,8 @@ CHUNK_SIZE = 2000  # 보낼 때 여유를 두기 위한 크기
 
 class LlmService:
     @staticmethod
-    def extract_keywords_gpt(text: str, cm: str) -> list[str]:
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    async def extract_keywords_gpt(text: str, cm: str) -> list[str]:
+        client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY")) # 비동기로 요청
 
         #OpenAI.api_key = os.getenv("OPENAI_API_KEY")
 
@@ -44,16 +47,16 @@ class LlmService:
                     #명령문
                     너는 주식 애널리스트야.
                     다음 텍스트는 미국 주식에 대해 얘기하는 { '한국' if cm == 'dc' else '전세계인의' } 주식 커뮤니티 게시글들을 모은 거야.
-                    이 텍스트를 보고 유저들이 현재 관심 있는 주식 종목명(ticker)과 어떤 감정을 갖고 있는지 표현해줘. (긍정, 부정, 중립)
-                    그 감정을 갖고 있는 원인을 알 수 있다면 같이 출력해줘.              
+                    이 텍스트를 보고 유저들이 현재 관심 있는 주식 종목명(ticker) 10개와 어떤 평가를 하는지 20자 내로 요약해줘.
 
-                    #예시
-                    📌 [TSLA] (긍정): 4월 27일 실적 발표를 앞두고 있음. 이로 인한 주가 상승 기대중.
-                    📌 [NIKE] (중립): 일부는 공매도 포지션을 잡고 시장을 예상하는 중. 단기 변동성에 대비하는 모습.
-                    (생략)
+                    #출력 형식
+                    [{{
+                        "ticker": "[해당 ticker]",
+                        "summary_text": "[해당 ticker에 대한 유저들의 평가]"
+                    }}, ...]
                 '''
         
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[
                 {"role": "system", "content": prompt},
@@ -79,26 +82,37 @@ class LlmService:
         start = time.time()
 
         # 스프레드 시트에서 가져오기
+        '''
         sheet = client.open("stockus-posts").worksheet("posts")
         all_data = sheet.get_all_records()
+        '''
+        # 오늘 날짜 계산 (KST 기준)
+        KST = timezone(timedelta(hours=9))
+        today = datetime.now(KST).date()
+        today_start = datetime.combine(today, datetime.min.time()).replace(tzinfo=KST)
+
+        # 오늘 날짜 데이터만 조회
+        today_posts = supabase.table("post_dc").select("*").gte("date", today_start.isoformat()).execute()
+        print(today_posts)
 
         full_text = ''
 
-        for post in all_data:
+        for post in today_posts.data:
             full_text += post["title"] + " " + post["contents"]
 
         print(len(full_text)) # 전체 글자수 확인
             
-        result = LlmService.extract_keywords_gpt(full_text, 'dc')
+        result = await LlmService.extract_keywords_gpt(full_text, 'dc')
         #result = extract_keywords(" ".join(keywords_list))
 
-        sheet = client.open("stockus-posts").worksheet("summary")
+        #sheet = client.open("stockus-posts").worksheet("summary")
+        print(result)
 
-        KST = timezone(timedelta(hours=9))
-        kst_now = datetime.now(KST)
+        # KST = timezone(timedelta(hours=9))
+        # kst_now = datetime.now(KST)
 
-        time_stamp = kst_now.strftime("%Y-%m-%d %H:%M:%S") # kst 기준
-        sheet.append_rows([[result, time_stamp]])
+        time_stamp = today.strftime("%Y-%m-%d %H:%M:%S") # kst 기준
+        #sheet.append_rows([[result, time_stamp]])
         
         end = time.time()
 
@@ -128,7 +142,10 @@ class LlmService:
         elif cm == 'rd': # reddit
 
             text = json.dumps(RedditService.get_reddit_posts())
-            result = await LlmService.extract_keywords_gpt_async(text, 'rd')
+
+            #task1 = asyncio.create_task(LlmService.extract_keywords_gpt(text, 'rd'))
+            
+            result = await LlmService.extract_keywords_gpt(text, 'rd')
             KST = timezone(timedelta(hours=9))
             kst_now = datetime.now(KST)
 

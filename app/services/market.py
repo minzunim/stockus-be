@@ -18,6 +18,7 @@ class MarketService:
         for key, value in us_3.items():
             # 최근 2일 데이터 (등락률 계산 시 필요)
             stock_df_tail = yf.download(value, progress=False, session=session, period="2d")
+            print('stock', stock_df_tail)
 
             if stock_df_tail.empty:
                 logging.warning(f"{key} ({value}) 데이터가 없습니다.")
