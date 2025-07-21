@@ -47,13 +47,14 @@ class LlmService:
                     #명령문
                     너는 주식 애널리스트야.
                     다음 텍스트는 미국 주식에 대해 얘기하는 { '한국' if cm == 'dc' else '전세계인의' } 주식 커뮤니티 게시글들을 모은 거야.
-                    이 텍스트를 보고 유저들이 현재 관심 있는 주식 종목명(ticker) 10개와 어떤 평가를 하는지 20자 내로 요약해줘.
+                    이 텍스트를 보고 유저들이 현재 관심 있는 주식 종목명(ticker) 10개와 어떤 평가를 하는지 한글로 20자 내로 요약해줘.
 
                     #출력 형식
                     [{{
-                        "ticker": "[해당 ticker]"
-                        "summary": "[해당 ticker에 대한 유저들의 평가]"
-                        "Rating": "[buy, hold, sell 중 하나]"
+                        "ticker": "[해당 ticker]",
+                        "summary": "[해당 ticker에 대한 유저들의 평가]",
+                        "rating": "[buy, hold, sell 중 하나]",
+                        "community": "{cm}",
                     }}, ...]
                 '''
         
@@ -103,42 +104,55 @@ class LlmService:
 
         print(len(full_text)) # 전체 글자수 확인
             
-        result = await LlmService.extract_keywords_gpt(full_text, 'dc')
+        summary = await LlmService.extract_keywords_gpt(full_text, 'dc')
         #result = extract_keywords(" ".join(keywords_list))
 
         #sheet = client.open("stockus-posts").worksheet("summary")
-        print(result)
+        print(summary)
 
         # KST = timezone(timedelta(hours=9))
         # kst_now = datetime.now(KST)
+
+        response = supabase.table('summary').insert(json.loads(summary)).execute() # json 형태로 변환
 
         time_stamp = today.strftime("%Y-%m-%d %H:%M:%S") # kst 기준
         #sheet.append_rows([[result, time_stamp]])
         
         end = time.time()
 
-        return {"data": result, "time": f"{end - start: 0.2f}초"}
+        return {"data": summary, "time": f"{end - start: 0.2f}초"}
 
     # llm 요약 글 조회
     # DC: 시트에 저장된 요약 조회 / Reddit: 시트 저장 x -> Reddit API 호출 후 바로 llm 요약
     @staticmethod
     async def llm_summary(cm: str):
         if cm == 'dc': # dc
-            sheet = client.open("stockus-posts").worksheet("summary")
-            all_values = sheet.get_all_values()
-            last_row = all_values[-1] if all_values else None; 
+            # sheet = client.open("stockus-posts").worksheet("summary")
+            # all_values = sheet.get_all_values()
+            # last_row = all_values[-1] if all_values else None; 
         #print(last_row)
+
+            KST = timezone(timedelta(hours=9))
+            today = datetime.now(KST).date()
+            yesterday = today - timedelta(days=1)
+
+            # 어제 00:00:00 ~ 내일 00:00:00
+            KST = timezone(timedelta(hours=9))
+            today = datetime.now(KST).date()
+            start_date_kst = datetime.combine(today, datetime.min.time()).replace(tzinfo=KST)
+            end_date_kst = datetime.combine(today + timedelta(days=1), datetime.min.time()).replace(tzinfo=KST)
+
+            # KST → UTC로 변환
+            start_date_utc = start_date_kst.astimezone(timezone.utc)
+            end_date_utc = end_date_kst.astimezone(timezone.utc)
+
+            summary_data = supabase.table("summary").select("*") \
+                        .gte("created_at", start_date_kst.isoformat()) \
+                        .lt("created_at", end_date_kst.isoformat()) \
+                        .execute()
             
-            if last_row:
-                return { 
-                    "text": last_row[0],
-                    "time_stamp": last_row[1]
-                }
-            else:
-                return { 
-                    "text": "데이터가 없습니다.",
-                    "time_stamp": "" 
-                    }
+            return { "data": summary_data }
+
 
         elif cm == 'rd': # reddit
 
@@ -151,7 +165,7 @@ class LlmService:
             kst_now = datetime.now(KST)
 
             return {
-                "text": result,
+                "text": json.loads(result),
                 "time_stamp": kst_now.strftime("%Y-%m-%d %H:%M:%S") # kst 기준
             }
         else: 

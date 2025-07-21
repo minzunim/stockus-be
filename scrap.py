@@ -16,7 +16,7 @@ def run_daily_scraper():
 
 async def run_tasks_sequentially():
     start = time.time()
-    #await ScrapService.scrap_posts_multi()
+    await ScrapService.scrap_posts_multi()
     await LlmService.summarize_by_llm_dc() # dc 크론 처리
     end = time.time()
     print(f"{end - start: 0.2f}초")
