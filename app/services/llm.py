@@ -51,8 +51,9 @@ class LlmService:
 
                     #출력 형식
                     [{{
-                        "ticker": "[해당 ticker]",
-                        "summary_text": "[해당 ticker에 대한 유저들의 평가]"
+                        "ticker": "[해당 ticker]"
+                        "summary": "[해당 ticker에 대한 유저들의 평가]"
+                        "Rating": "[buy, hold, sell 중 하나]"
                     }}, ...]
                 '''
         

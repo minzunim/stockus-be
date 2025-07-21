@@ -170,7 +170,7 @@ class ScrapService:
                    recommend = row.select_one("td.gall_recommend").text.strip()
                    contents = fetch_post_data(post_id)
                    post = {
-                      "id": post_id,
+                      "post_id": post_id,
                       "title": title_tag.text.strip(),
                       "date": date,
                       "views": views,
@@ -197,7 +197,7 @@ class ScrapService:
        if posts:
           data_to_insert = [
              {
-                "id": post["id"],
+                "post_id": post["post_id"],
                 "title": post["title"],
                 "date": post["date"],
                 "views": post["views"],
@@ -209,7 +209,11 @@ class ScrapService:
           print(data_to_insert)
 
           # Supabase의 insert 메서드 사용 (더 안전하고 간단)
-          response = supabase.table("post_dc").insert(data_to_insert).execute()
+          response = supabase.table("post_dc").upsert(
+                        data_to_insert, 
+                        on_conflict='post_id',  # 중복 여부를 판단할 기준 컬럼
+                        ignore_duplicates=True  # 중복 데이터는 무시하고 넘어가기
+                    ).execute()
           
           # 응답 처리
           if response.data:
