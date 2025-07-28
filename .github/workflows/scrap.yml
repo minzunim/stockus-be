@@ -2,7 +2,7 @@ name: Daily Scrape and Summary
 
 on:
   schedule:
-    - cron: "50 12 * * *"
+    - cron: "40 02 * * *"
   workflow_dispatch:  # 수동 실행도 가능하게!
 
 jobs:
